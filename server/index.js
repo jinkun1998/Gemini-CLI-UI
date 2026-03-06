@@ -45,7 +45,7 @@ import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
-import { DEFAULT_MODELS } from './models.js';
+import { DEFAULT_MODELS, fetchGeminiModels } from './models.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -205,32 +205,8 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
 
 app.get('/api/models', authenticateToken, async (req, res) => {
   try {
-    const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
-    if (!apiKey) {
-      // If no API key, return the default list
-      return res.status(200).json({ models: DEFAULT_MODELS });
-    }
-    
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    const data = await response.json();
-    
-    if (data.error) {
-      // Fallback to defaults on error
-      return res.status(200).json({ models: DEFAULT_MODELS });
-    }
-    
-    // Filter for Gemini models only
-    const geminiModels = (data.models || [])
-      .filter(model => model.name.includes('gemini'))
-      .map(model => ({
-        name: model.name,
-        displayName: model.displayName,
-        description: model.description
-      }));
-      
-    // Combine with defaults to ensure we have the names we expect, or just return the fetched ones
-    // Actually, sorting them is better.
-    res.json({ models: geminiModels.length > 0 ? geminiModels : DEFAULT_MODELS });
+    const models = await fetchGeminiModels();
+    res.json({ models });
   } catch (error) {
     res.status(200).json({ models: DEFAULT_MODELS });
   }
@@ -1046,6 +1022,16 @@ async function startServer() {
       
       // Start watching the projects folder for changes
       await setupProjectsWatcher(); // Re-enabled with better-sqlite3
+
+      // Pre-warm projects cache and fetch models
+      try {
+        await Promise.all([
+          getProjects(),
+          fetchGeminiModels()
+        ]);
+      } catch (cacheError) {
+        // console.warn('Failed to pre-warm caches:', cacheError.message);
+      }
     });
   } catch (error) {
     // console.error('❌ Failed to start server:', error);

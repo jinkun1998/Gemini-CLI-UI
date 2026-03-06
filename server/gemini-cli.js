@@ -10,7 +10,9 @@ let activeGeminiProcesses = new Map(); // Track active processes by session ID
 
 async function spawnGemini(command, options = {}, ws) {
   const modelOrder = getModelOrder();
-  const currentModel = options.model || modelOrder[0];
+  // Ensure currentModel is clean (no models/ prefix) for matching in modelOrder
+  const rawModel = options.model || modelOrder[0];
+  const currentModel = rawModel.replace('models/', '');
   
   return new Promise(async (resolve, reject) => {
     const { sessionId, projectPath, cwd, resume, toolsSettings, permissionMode, images } = options;
@@ -92,6 +94,11 @@ async function spawnGemini(command, options = {}, ws) {
     // Add model
     args.push('--model', currentModel);
     
+    // Add approval-mode if specified
+    if (permissionMode) {
+      args.push('--approval-mode', permissionMode);
+    }
+    
     // Add --yolo flag if skipPermissions is enabled
     if (settings.skipPermissions) {
       args.push('--yolo');
@@ -115,7 +122,7 @@ async function spawnGemini(command, options = {}, ws) {
     let hasReceivedOutput = false;
     const timeoutMs = 30000;
     const timeout = setTimeout(() => {
-      if (!hasReceivedOutput) {
+      if (!hasReceivedOutput && !quotaReached) {
         ws.send(JSON.stringify({
           type: 'gemini-error',
           error: 'Gemini CLI timeout - no response received'
@@ -185,18 +192,31 @@ async function spawnGemini(command, options = {}, ws) {
       }
     });
     
+    let hasReceivedStderr = false;
     geminiProcess.stderr.on('data', (data) => {
       const errorMsg = data.toString();
+      hasReceivedStderr = true;
       
+      // 1. Check for fatal errors that should trigger model fallback
       if (errorMsg.includes('Resource has been exhausted') || 
           errorMsg.includes('Quota exceeded') || 
           errorMsg.includes('Rate limit reached') ||
-          errorMsg.includes('429')) {
-        quotaReached = true;
+          errorMsg.includes('429') ||
+          errorMsg.includes('ModelNotFoundError') ||
+          errorMsg.includes('404') ||
+          errorMsg.includes('400') ||
+          errorMsg.includes('INVALID_ARGUMENT') ||
+          errorMsg.includes('Thinking_config.include_thoughts') ||
+          errorMsg.includes('An unexpected critical error occurred')) {
+        quotaReached = true; 
+        clearTimeout(timeout); // Clear timeout immediately on recognized fatal error
         return;
       }
 
-      if (errorMsg.includes('[DEP0040]') || 
+      // 2. Filter out noisy but non-fatal internal messages (don't show to user, don't trigger fallback)
+      if (errorMsg.includes('Approval mode "plan" is only available') ||
+          errorMsg.includes('Falling back to "default"') ||
+          errorMsg.includes('[DEP0040]') || 
           errorMsg.includes('DeprecationWarning') ||
           errorMsg.includes('--trace-deprecation') ||
           errorMsg.includes('Loaded cached credentials')) {
@@ -220,9 +240,13 @@ async function spawnGemini(command, options = {}, ws) {
         const currentIndex = modelOrder.indexOf(currentModel);
         if (currentIndex !== -1 && currentIndex < modelOrder.length - 1) {
           const nextModel = modelOrder[currentIndex + 1];
+          // Send status to UI so it can update the model selector silently
           ws.send(JSON.stringify({
             type: 'gemini-status',
-            data: { message: `Quota reached for ${currentModel}. Falling back to ${nextModel}...` }
+            data: { 
+              message: 'Optimizing...', 
+              fallbackModel: nextModel 
+            }
           }));
           
           const newOptions = { ...options, model: nextModel };

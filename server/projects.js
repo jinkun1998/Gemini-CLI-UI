@@ -7,9 +7,16 @@ import readline from 'readline';
 const projectDirectoryCache = new Map();
 let cacheTimestamp = Date.now();
 
+// Cache for full projects list
+let projectsListCache = null;
+let projectsListCacheTimestamp = 0;
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes cache
+
 // Clear cache when needed (called when project files change)
 function clearProjectDirectoryCache() {
   projectDirectoryCache.clear();
+  projectsListCache = null;
+  projectsListCacheTimestamp = 0;
   cacheTimestamp = Date.now();
 }
 
@@ -66,114 +73,100 @@ async function generateDisplayName(projectName, actualProjectDir = null) {
 }
 
 // Extract the actual project directory from JSONL sessions (with caching)
+// Extract the actual project directory from JSONL sessions (with caching)
 async function extractProjectDirectory(projectName) {
-  // Check cache first
+  // Check memory cache first
   if (projectDirectoryCache.has(projectName)) {
     return projectDirectoryCache.get(projectName);
   }
   
-  
   const projectDir = path.join(process.env.HOME, '.gemini', 'projects', projectName);
-  const cwdCounts = new Map();
-  let latestTimestamp = 0;
-  let latestCwd = null;
-  let extractedPath;
+  let extractedPath = null;
   
   try {
-    const files = await fs.readdir(projectDir);
+    // Try to decode from name first as a fast fallback
+    try {
+      let base64Name = projectName.replace(/_/g, '+').replace(/-/g, '/');
+      if (base64Name.endsWith('++')) {
+        base64Name = base64Name.slice(0, -2) + '==';
+      }
+      extractedPath = Buffer.from(base64Name, 'base64').toString('utf8');
+      extractedPath = extractedPath.replace(/[^\x20-\x7E]/g, '').trim();
+      
+      // If it looks like a valid path, we can use it as a candidate
+      if (extractedPath && (extractedPath.startsWith('/') || extractedPath.includes('\\'))) {
+        // We still check sessions if they exist to be sure, but we have a good candidate
+      } else {
+        extractedPath = null;
+      }
+    } catch (e) {
+      extractedPath = null;
+    }
+
+    const files = await fs.readdir(projectDir).catch(() => []);
     const jsonlFiles = files.filter(file => file.endsWith('.jsonl'));
     
-    if (jsonlFiles.length === 0) {
-      // Fall back to decoded project name if no sessions
-      // First try to decode from base64
-      try {
-        // Handle custom padding: __ at the end should be replaced with ==
-        let base64Name = projectName.replace(/_/g, '+').replace(/-/g, '/');
-        if (base64Name.endsWith('++')) {
-          base64Name = base64Name.slice(0, -2) + '==';
-        }
-        extractedPath = Buffer.from(base64Name, 'base64').toString('utf8');
-        // Clean the path by removing any non-printable characters
-        extractedPath = extractedPath.replace(/[^\x20-\x7E]/g, '').trim();
-      } catch (e) {
-        // If base64 decode fails, use old method
-        extractedPath = projectName.replace(/-/g, '/');
-      }
-    } else {
-      // Process all JSONL files to collect cwd values
-      for (const file of jsonlFiles) {
-        const jsonlFile = path.join(projectDir, file);
-        const fileStream = fsSync.createReadStream(jsonlFile);
-        const rl = readline.createInterface({
-          input: fileStream,
-          crlfDelay: Infinity
-        });
+    if (jsonlFiles.length > 0) {
+      // Just check the most recent session file to save time
+      // Sort by mtime to find the latest
+      const fileStats = await Promise.all(
+        jsonlFiles.map(async (file) => {
+          const stats = await fs.stat(path.join(projectDir, file));
+          return { file, mtime: stats.mtimeMs };
+        })
+      );
+      
+      fileStats.sort((a, b) => b.mtime - a.mtime);
+      
+      // Try the latest 3 files at most
+      for (let i = 0; i < Math.min(3, fileStats.length); i++) {
+        const jsonlFile = path.join(projectDir, fileStats[i].file);
         
-        for await (const line of rl) {
-          if (line.trim()) {
+        // Use a faster way to read just a bit of the file
+        // Read the last 4KB of the file which likely contains the most recent CWD
+        try {
+          const stats = await fs.stat(jsonlFile);
+          const fd = await fs.open(jsonlFile, 'r');
+          const bufferSize = Math.min(stats.size, 4096);
+          const buffer = Buffer.alloc(bufferSize);
+          
+          await fd.read(buffer, 0, bufferSize, stats.size - bufferSize);
+          await fd.close();
+          
+          const lastLines = buffer.toString().split('\n').filter(Boolean).reverse();
+          for (const line of lastLines) {
             try {
               const entry = JSON.parse(line);
-              
               if (entry.cwd) {
-                // Count occurrences of each cwd
-                cwdCounts.set(entry.cwd, (cwdCounts.get(entry.cwd) || 0) + 1);
-                
-                // Track the most recent cwd
-                const timestamp = new Date(entry.timestamp || 0).getTime();
-                if (timestamp > latestTimestamp) {
-                  latestTimestamp = timestamp;
-                  latestCwd = entry.cwd;
-                }
+                extractedPath = entry.cwd;
+                break;
               }
-            } catch (parseError) {
-              // Skip malformed lines
-            }
+            } catch (e) {}
           }
-        }
-      }
-      
-      // Determine the best cwd to use
-      if (cwdCounts.size === 0) {
-        // No cwd found, fall back to decoded project name
-        extractedPath = projectName.replace(/-/g, '/');
-      } else if (cwdCounts.size === 1) {
-        // Only one cwd, use it
-        extractedPath = Array.from(cwdCounts.keys())[0];
-      } else {
-        // Multiple cwd values - prefer the most recent one if it has reasonable usage
-        const mostRecentCount = cwdCounts.get(latestCwd) || 0;
-        const maxCount = Math.max(...cwdCounts.values());
-        
-        // Use most recent if it has at least 25% of the max count
-        if (mostRecentCount >= maxCount * 0.25) {
-          extractedPath = latestCwd;
-        } else {
-          // Otherwise use the most frequently used cwd
-          for (const [cwd, count] of cwdCounts.entries()) {
-            if (count === maxCount) {
-              extractedPath = cwd;
-              break;
-            }
+        } catch (e) {
+          // Fallback to stream if direct read fails
+          const fileStream = fsSync.createReadStream(jsonlFile, { start: Math.max(0, (await fs.stat(jsonlFile)).size - 10000) });
+          const rl = readline.createInterface({ input: fileStream });
+          for await (const line of rl) {
+            try {
+              const entry = JSON.parse(line);
+              if (entry.cwd) extractedPath = entry.cwd;
+            } catch (e) {}
           }
         }
         
-        // Fallback (shouldn't reach here)
-        if (!extractedPath) {
-          try {
-            extractedPath = latestCwd || Buffer.from(projectName.replace(/_/g, '+').replace(/-/g, '/'), 'base64').toString('utf8');
-          } catch (e) {
-            extractedPath = latestCwd || projectName.replace(/-/g, '/');
-          }
-        }
+        if (extractedPath) break;
       }
     }
     
-    // Clean the extracted path by removing any non-printable characters
+    // Final fallback if still nothing
+    if (!extractedPath) {
+      extractedPath = projectName.replace(/-/g, '/');
+    }
+    
+    // Clean and cache
     extractedPath = extractedPath.replace(/[^\x20-\x7E]/g, '').trim();
-    
-    // Cache the result
     projectDirectoryCache.set(projectName, extractedPath);
-    
     return extractedPath;
     
   } catch (error) {
@@ -200,6 +193,12 @@ async function extractProjectDirectory(projectName) {
 }
 
 async function getProjects() {
+  // Use cache if available and not expired
+  const now = Date.now();
+  if (projectsListCache && (now - projectsListCacheTimestamp < CACHE_TTL)) {
+    return projectsListCache;
+  }
+
   const geminiDir = path.join(process.env.HOME, '.gemini', 'projects');
   const config = await loadProjectConfig();
   const projects = [];
@@ -209,10 +208,10 @@ async function getProjects() {
     // First, get existing projects from the file system
     const entries = await fs.readdir(geminiDir, { withFileTypes: true });
     
-    for (const entry of entries) {
+    // Process projects in parallel for better performance
+    const projectPromises = entries.map(async (entry) => {
       if (entry.isDirectory()) {
         existingProjects.add(entry.name);
-        const projectPath = path.join(geminiDir, entry.name);
         
         // Extract actual project directory from JSONL sessions
         const actualProjectDir = await extractProjectDirectory(entry.name);
@@ -220,37 +219,39 @@ async function getProjects() {
         // Get display name from config or generate one
         const customName = config[entry.name]?.displayName;
         const autoDisplayName = await generateDisplayName(entry.name, actualProjectDir);
-        const fullPath = actualProjectDir;
         
         const project = {
           name: entry.name,
           path: actualProjectDir,
           displayName: customName || autoDisplayName,
-          fullPath: fullPath,
+          fullPath: actualProjectDir,
           isCustomName: !!customName,
           sessions: []
         };
         
-        // Try to get sessions for this project (just first 5 for performance)
+        // Optimized session loading: only get recent sessions if explicitly needed
+        // For the main list, we'll just get the session metadata
         try {
-          // Use sessionManager to get sessions for this project
           const sessionManager = (await import('./sessionManager.js')).default;
           const allSessions = sessionManager.getProjectSessions(actualProjectDir);
           
-          // Paginate the sessions
-          const paginatedSessions = allSessions.slice(0, 5);
-          project.sessions = paginatedSessions;
+          // Only include the most recent 3 sessions for the main list
+          project.sessions = allSessions.slice(0, 3);
           project.sessionMeta = {
-            hasMore: allSessions.length > 5,
+            hasMore: allSessions.length > 3,
             total: allSessions.length
           };
         } catch (e) {
           // console.warn(`Could not load sessions for project ${entry.name}:`, e.message);
         }
         
-        projects.push(project);
+        return project;
       }
-    }
+      return null;
+    });
+
+    const results = await Promise.all(projectPromises);
+    projects.push(...results.filter(p => p !== null));
   } catch (error) {
     // console.error('Error reading projects directory:', error);
   }
@@ -258,31 +259,36 @@ async function getProjects() {
   // Add manually configured projects that don't exist as folders yet
   for (const [projectName, projectConfig] of Object.entries(config)) {
     if (!existingProjects.has(projectName) && projectConfig.manuallyAdded) {
-      // Use the original path if available, otherwise extract from potential sessions
       let actualProjectDir = projectConfig.originalPath;
       
       if (!actualProjectDir) {
         try {
           actualProjectDir = await extractProjectDirectory(projectName);
         } catch (error) {
-          // Fall back to decoded project name
           actualProjectDir = projectName.replace(/-/g, '/');
         }
       }
       
-              const project = {
-          name: projectName,
-          path: actualProjectDir,
-          displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
-          fullPath: actualProjectDir,
-          isCustomName: !!projectConfig.displayName,
-          isManuallyAdded: true,
-          sessions: []
-        };
+      const project = {
+        name: projectName,
+        path: actualProjectDir,
+        displayName: projectConfig.displayName || await generateDisplayName(projectName, actualProjectDir),
+        fullPath: actualProjectDir,
+        isCustomName: !!projectConfig.displayName,
+        isManuallyAdded: true,
+        sessions: []
+      };
       
       projects.push(project);
     }
   }
+  
+  // Sort projects by display name initially
+  projects.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+  
+  // Update cache
+  projectsListCache = projects;
+  projectsListCacheTimestamp = now;
   
   return projects;
 }

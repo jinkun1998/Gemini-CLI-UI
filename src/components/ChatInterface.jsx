@@ -927,13 +927,35 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
               <div className={`text-sm ${message.type === 'error' ? 'text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800 relative' : 'text-gray-700 dark:text-gray-300'}`}>
                 {message.type === 'error' && (
                   <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(message.content)
-                        .catch(() => {
-                          // Silently fail if clipboard access is denied
-                        });
+                    onClick={(e) => {
+                      const btn = e.currentTarget;
+                      const originalText = btn.innerText;
+                      const textToCopy = message.content;
+                      
+                      const performCopy = () => {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                          return navigator.clipboard.writeText(textToCopy);
+                        } else {
+                          const textarea = document.createElement('textarea');
+                          textarea.value = textToCopy;
+                          document.body.appendChild(textarea);
+                          textarea.select();
+                          const success = document.execCommand('copy');
+                          document.body.removeChild(textarea);
+                          return success ? Promise.resolve() : Promise.reject();
+                        }
+                      };
+
+                      performCopy().then(() => {
+                        btn.innerText = 'Copied!';
+                        btn.classList.add('bg-green-600');
+                        setTimeout(() => {
+                          btn.innerText = originalText;
+                          btn.classList.remove('bg-green-600');
+                        }, 2000);
+                      }).catch(() => {});
                     }}
-                    className="absolute top-2 right-2 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                    className="absolute top-2 right-2 px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white rounded transition-all duration-200 shadow-sm z-10"
                   >
                     Copy
                   </button>
@@ -1040,9 +1062,49 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       return '';
     }
   });
+  const [availableModels, setAvailableModels] = useState([]);
+
+  // Fetch available models from the API
+  const fetchModels = useCallback(async () => {
+    try {
+      const response = await api.getModels();
+      if (response.ok) {
+        const data = await response.json();
+        if (data.models && data.models.length > 0) {
+          const models = data.models.map(m => ({
+            value: m.name.replace('models/', ''),
+            label: m.displayName || m.name.replace('models/', ''),
+            description: m.description || ''
+          }));
+          setAvailableModels(models);
+          
+          // Check if current selection is valid, if not, pick the first one
+          // We use a functional update or read from localStorage here to avoid dependency on selectedModel state itself
+          setSelectedModel(current => {
+            if (!current || !models.find(m => m.value === current)) {
+              const firstModel = models[0].value;
+              
+              // Persist the default model selection
+              try {
+                const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+                settings.selectedModel = firstModel;
+                localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+              } catch (e) {}
+              
+              return firstModel;
+            }
+            return current;
+          });
+        }
+      }
+    } catch (error) {
+      // console.error('Error fetching models:', error);
+    }
+  }, []); // No dependency on selectedModel now
+
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
   const [isSystemSessionChange, setIsSystemSessionChange] = useState(false);
-  const [permissionMode, setPermissionMode] = useState('default');
+  const [permissionMode, setPermissionMode] = useState('');
   const [attachedImages, setAttachedImages] = useState([]);
   const [uploadingImages, setUploadingImages] = useState(new Map());
   const [imageErrors, setImageErrors] = useState(new Map());
@@ -1651,6 +1713,23 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             // Check for different status message formats
             if (statusData.message) {
               statusInfo.text = statusData.message;
+              
+              // Handle model fallback detection
+              // Silent fallback: look for fallbackModel field or the old text pattern
+              const fallbackModel = statusData.fallbackModel;
+              const fallbackMatch = statusData.message ? statusData.message.match(/Switching to ([\w\.-]+)\.\.\./) : null;
+              const newModel = fallbackModel || (fallbackMatch ? fallbackMatch[1] : null);
+
+              if (newModel) {
+                setSelectedModel(newModel);
+                
+                // Persist the fallback model selection
+                try {
+                  const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+                  settings.selectedModel = newModel;
+                  localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+                } catch (e) {}
+              }
             } else if (statusData.status) {
               statusInfo.text = statusData.status;
             } else if (typeof statusData === 'string') {
@@ -1684,8 +1763,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   useEffect(() => {
     if (selectedProject) {
       fetchProjectFiles();
+      fetchModels();
     }
-  }, [selectedProject]);
+  }, [selectedProject, fetchModels]);
 
   const fetchProjectFiles = async () => {
     try {
@@ -2032,7 +2112,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
         resume: !!currentSessionId,
         toolsSettings: toolsSettings,
         permissionMode: permissionMode,
-        model: toolsSettings.selectedModel || '',
+        model: selectedModel || toolsSettings.selectedModel || '',
         images: uploadedImages // Pass images to backend
       }
     });
@@ -2196,6 +2276,27 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     // setPermissionMode(modes[nextIndex]);
   };
 
+  const handleModelChange = (e) => {
+    const newModel = e.target.value;
+    setSelectedModel(newModel);
+    
+    // Persist to localStorage
+    try {
+      const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
+      settings.selectedModel = newModel;
+      localStorage.setItem('gemini-tools-settings', JSON.stringify(settings));
+      
+      // Trigger storage event for other components
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'gemini-tools-settings',
+        newValue: JSON.stringify(settings),
+        storageArea: localStorage
+      }));
+    } catch (err) {
+      // console.error('Error saving model setting:', err);
+    }
+  };
+
   // Don't render if no project is selected
   if (!selectedProject) {
     return (
@@ -2326,7 +2427,48 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               <div className="flex items-center gap-2">
                 <div className={`w-2 h-2 rounded-full animate-pulse ${isYoloMode ? 'bg-orange-500' : 'bg-cyan-500'}`} />
                 <span>{isYoloMode ? 'Gemini YOLO' : 'Gemini Default'}</span>
-                <span className="text-xs opacity-75">• {selectedModel}</span>
+                <span className="text-xs opacity-75 shrink-0">•</span>
+                <div className="relative group/model">
+                  <select
+                    value={selectedModel}
+                    onChange={handleModelChange}
+                    className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer hover:underline appearance-none pr-4 border-none p-0 m-0"
+                    title="Change Gemini Model"
+                  >
+                    {availableModels.length > 0 ? (
+                      availableModels.map(model => (
+                        <option key={model.value} value={model.value} className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                          {model.label}
+                        </option>
+                      ))
+                    ) : (
+                      <option value={selectedModel}>{selectedModel}</option>
+                    )}
+                  </select>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 group-hover/model:opacity-100 transition-opacity">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                <span className="text-xs opacity-75 shrink-0">•</span>
+                <div className="relative group/mode">
+                  <select
+                    value={permissionMode}
+                    onChange={(e) => setPermissionMode(e.target.value)}
+                    className="bg-transparent text-xs font-medium focus:outline-none cursor-pointer hover:underline appearance-none pr-4 border-none p-0 m-0"
+                    title="Change Approval Mode"
+                  >
+                    <option value="" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">Auto (No Flag)</option>
+                    <option value="default" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">Default Mode</option>
+                    <option value="plan" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">Plan Mode</option>
+                  </select>
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 group-hover/mode:opacity-100 transition-opacity">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
               </div>
             </div>
             
