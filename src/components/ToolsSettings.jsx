@@ -42,7 +42,7 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('tools');
-  const [selectedModel, setSelectedModel] = useState('gemini-2.5-flash');
+  const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
 
   // Common tool patterns
@@ -66,8 +66,14 @@ function ToolsSettings({ isOpen, onClose }) {
   
   // Available Gemini models (tested and verified)
   const availableModels = [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient latest model (Recommended)' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Most advanced model (Note: May have quota limits)' }
+    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', description: 'Most advanced latest model (Recommended)' },
+    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' },
+    { value: 'gemini-2.0-pro-exp', label: 'Gemini 2.0 Pro Experimental', description: 'Experimental 2.0 Pro model' },
+    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Previous fast and efficient model' },
+    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Legacy advanced model' },
+    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Legacy fast and efficient model' }
   ];
 
   // MCP API functions
@@ -297,7 +303,7 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
-        setSelectedModel(settings.selectedModel || 'gemini-2.5-flash');
+        setSelectedModel(settings.selectedModel || 'gemini-3.1-pro');
         setEnableNotificationSound(settings.enableNotificationSound || false);
       } else {
         // Set defaults

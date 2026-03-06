@@ -1035,9 +1035,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   const [selectedModel, setSelectedModel] = useState(() => {
     try {
       const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
-      return settings.selectedModel || 'gemini-2.5-flash';
+      return settings.selectedModel || 'gemini-3.1-pro';
     } catch (e) {
-      return 'gemini-2.5-flash';
+      return 'gemini-3.1-pro';
     }
   });
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
@@ -1377,10 +1377,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       try {
         const settings = JSON.parse(localStorage.getItem('gemini-tools-settings') || '{}');
         setIsYoloMode(settings.skipPermissions || false);
-        setSelectedModel(settings.selectedModel || 'gemini-2.5-flash');
+        setSelectedModel(settings.selectedModel || 'gemini-3.1-pro');
       } catch (e) {
         setIsYoloMode(false);
-        setSelectedModel('gemini-2.5-flash');
+        setSelectedModel('gemini-3.1-pro');
       }
     };
     
@@ -2005,7 +2005,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             allowedTools: settings.allowedTools || [],
             disallowedTools: settings.disallowedTools || [],
             skipPermissions: settings.skipPermissions || false,
-            selectedModel: settings.selectedModel || 'gemini-2.5-flash'
+            selectedModel: settings.selectedModel || 'gemini-3.1-pro'
           };
         }
       } catch (error) {
@@ -2015,7 +2015,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
         allowedTools: [],
         disallowedTools: [],
         skipPermissions: false,
-        selectedModel: 'gemini-2.5-flash'
+        selectedModel: 'gemini-3.1-pro'
       };
     };
 
@@ -2032,7 +2032,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
         resume: !!currentSessionId,
         toolsSettings: toolsSettings,
         permissionMode: permissionMode,
-        model: toolsSettings.selectedModel || 'gemini-2.5-flash',
+        model: toolsSettings.selectedModel || 'gemini-3.1-pro',
         images: uploadedImages // Pass images to backend
       }
     });

@@ -44,7 +44,7 @@ A desktop and mobile UI for [Gemini CLI](https://github.com/google-gemini/gemini
 - **File Explorer** - Interactive file tree with syntax highlighting and live editing
 - **Git Explorer** - View, stage and commit your changes. You can also switch branches
 - **Session Management** - Resume conversations, manage multiple sessions, and track history
-- **Model Selection** - Choose from multiple Gemini models including Gemini 2.5 Pro
+- **Model Selection** - Choose from multiple Gemini models including Gemini 3.1 Pro
 - **YOLO Mode** - Skip confirmation prompts for faster operations (use with caution)
 
 ## Quick Start
