@@ -42,14 +42,9 @@ function ToolsSettings({ isOpen, onClose }) {
   const [mcpServerTools, setMcpServerTools] = useState({});
   const [mcpToolsLoading, setMcpToolsLoading] = useState({});
   const [activeTab, setActiveTab] = useState('tools');
-  const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro');
+  const [selectedModel, setSelectedModel] = useState('');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
-  const [availableModels, setAvailableModels] = useState([
-    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', description: 'Most advanced latest model (Recommended)' },
-    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' }
-  ]);
+  const [availableModels, setAvailableModels] = useState([]);
 
   // Common tool patterns
   const commonTools = [
@@ -85,6 +80,20 @@ function ToolsSettings({ isOpen, onClose }) {
             description: m.description || ''
           }));
           setAvailableModels(models);
+          
+          // If no model is selected yet, or the current selected model is not in the list,
+          // pick the first one from the list as default
+          const savedSettings = localStorage.getItem('gemini-tools-settings');
+          let savedModel = '';
+          if (savedSettings) {
+            savedModel = JSON.parse(savedSettings).selectedModel;
+          }
+          
+          if (!savedModel || !models.find(m => m.value === savedModel)) {
+            setSelectedModel(models[0].value);
+          } else {
+            setSelectedModel(savedModel);
+          }
         }
       }
     } catch (error) {
@@ -319,7 +328,7 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools(settings.disallowedTools || []);
         setSkipPermissions(settings.skipPermissions || false);
         setProjectSortOrder(settings.projectSortOrder || 'name');
-        setSelectedModel(settings.selectedModel || 'gemini-3.1-pro');
+        setSelectedModel(settings.selectedModel || '');
         setEnableNotificationSound(settings.enableNotificationSound || false);
       } else {
         // Set defaults
@@ -327,7 +336,7 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools([]);
         setSkipPermissions(false);
         setProjectSortOrder('name');
-        setSelectedModel('gemini-3.1-pro');
+        setSelectedModel('');
       }
 
       // Load MCP servers from API
@@ -339,7 +348,7 @@ function ToolsSettings({ isOpen, onClose }) {
       setDisallowedTools([]);
       setSkipPermissions(false);
       setProjectSortOrder('name');
-      setSelectedModel('gemini-3.1-pro');
+      setSelectedModel('');
     }
   };
 

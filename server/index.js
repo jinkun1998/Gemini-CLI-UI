@@ -45,6 +45,7 @@ import authRoutes from './routes/auth.js';
 import mcpRoutes from './routes/mcp.js';
 import { initializeDatabase } from './database/db.js';
 import { validateApiKey, authenticateToken, authenticateWebSocket } from './middleware/auth.js';
+import { DEFAULT_MODELS } from './models.js';
 
 // File system watcher for projects folder
 let projectsWatcher = null;
@@ -206,22 +207,16 @@ app.get('/api/models', authenticateToken, async (req, res) => {
   try {
     const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
     if (!apiKey) {
-      // If no API key, return a default list or an error
-      return res.status(200).json({ 
-        models: [
-          { name: 'models/gemini-3.1-pro', displayName: 'Gemini 3.1 Pro', description: 'Most advanced latest model' },
-          { name: 'models/gemini-3.1-flash', displayName: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
-          { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
-          { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' }
-        ]
-      });
+      // If no API key, return the default list
+      return res.status(200).json({ models: DEFAULT_MODELS });
     }
     
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     const data = await response.json();
     
     if (data.error) {
-      throw new Error(data.error.message || 'Failed to fetch models from Google');
+      // Fallback to defaults on error
+      return res.status(200).json({ models: DEFAULT_MODELS });
     }
     
     // Filter for Gemini models only
@@ -233,9 +228,11 @@ app.get('/api/models', authenticateToken, async (req, res) => {
         description: model.description
       }));
       
-    res.json({ models: geminiModels });
+    // Combine with defaults to ensure we have the names we expect, or just return the fetched ones
+    // Actually, sorting them is better.
+    res.json({ models: geminiModels.length > 0 ? geminiModels : DEFAULT_MODELS });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(200).json({ models: DEFAULT_MODELS });
   }
 });
 
