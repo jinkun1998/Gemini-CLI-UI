@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -35,7 +35,7 @@ const formatTimeAgo = (dateString, currentTime) => {
   return date.toLocaleDateString();
 };
 
-function Sidebar({ 
+const Sidebar = memo(function Sidebar({ 
   projects, 
   selectedProject, 
   selectedSession, 
@@ -263,7 +263,7 @@ function Sidebar({
         if (window.refreshProjects) {
           window.refreshProjects();
         } else {
-          window.location.reload();
+          window.dispatchEvent(new CustomEvent("gemini-refresh-projects"));
         }
       } else {
         console.error('Failed to rename project');
@@ -343,7 +343,7 @@ function Sidebar({
         if (window.refreshProjects) {
           window.refreshProjects();
         } else {
-          window.location.reload();
+          window.dispatchEvent(new CustomEvent("gemini-refresh-projects"));
         }
       } else {
         const error = await response.json();

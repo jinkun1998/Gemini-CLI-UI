@@ -44,6 +44,12 @@ function ToolsSettings({ isOpen, onClose }) {
   const [activeTab, setActiveTab] = useState('tools');
   const [selectedModel, setSelectedModel] = useState('gemini-3.1-pro');
   const [enableNotificationSound, setEnableNotificationSound] = useState(false);
+  const [availableModels, setAvailableModels] = useState([
+    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', description: 'Most advanced latest model (Recommended)' },
+    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
+    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
+    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' }
+  ]);
 
   // Common tool patterns
   const commonTools = [
@@ -65,18 +71,27 @@ function ToolsSettings({ isOpen, onClose }) {
   ];
   
   // Available Gemini models (tested and verified)
-  const availableModels = [
-    { value: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', description: 'Most advanced latest model (Recommended)' },
-    { value: 'gemini-3.1-flash', label: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
-    { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' },
-    { value: 'gemini-2.0-pro-exp', label: 'Gemini 2.0 Pro Experimental', description: 'Experimental 2.0 Pro model' },
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash', description: 'Previous fast and efficient model' },
-    { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro', description: 'Legacy advanced model' },
-    { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash', description: 'Legacy fast and efficient model' }
-  ];
-
+  
   // MCP API functions
+  const fetchModels = async () => {
+    try {
+      const response = await api.getModels();
+      if (response.ok) {
+        const data = await response.json();
+        if (data.models && data.models.length > 0) {
+          const models = data.models.map(m => ({
+            value: m.name.replace('models/', ''),
+            label: m.displayName || m.name.replace('models/', ''),
+            description: m.description || ''
+          }));
+          setAvailableModels(models);
+        }
+      }
+    } catch (error) {
+      // console.error('Error fetching models:', error);
+    }
+  };
+
   const fetchMcpServers = async () => {
     try {
       // MCP endpoints are not implemented yet - skip these calls
@@ -288,6 +303,7 @@ function ToolsSettings({ isOpen, onClose }) {
   useEffect(() => {
     if (isOpen) {
       loadSettings();
+      fetchModels();
     }
   }, [isOpen]);
 

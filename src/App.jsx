@@ -236,8 +236,15 @@ function AppContent() {
   // Expose fetchProjects globally for component access
   window.refreshProjects = fetchProjects;
 
-  // Handle URL-based session loading
   useEffect(() => {
+    const handleRefresh = () => {
+      fetchProjects();
+    };
+    window.addEventListener('gemini-refresh-projects', handleRefresh);
+    return () => window.removeEventListener('gemini-refresh-projects', handleRefresh);
+  }, []);
+
+  // Handle URL-based session loading  useEffect(() => {
     if (sessionId && projects.length > 0) {
       // Only switch tabs on initial load, not on every project update
       const shouldSwitchTab = !selectedSession || selectedSession.id !== sessionId;

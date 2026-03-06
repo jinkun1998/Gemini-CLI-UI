@@ -35,6 +35,7 @@ import os from 'os';
 import pty from 'node-pty';
 import fetch from 'node-fetch';
 import mime from 'mime-types';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 import { getProjects, getSessions, getSessionMessages, renameProject, deleteSession, deleteProject, addProjectManually, extractProjectDirectory, clearProjectDirectoryCache } from './projects.js';
 import { spawnGemini, abortGeminiSession } from './gemini-cli.js';
@@ -196,6 +197,43 @@ app.get('/api/projects', authenticateToken, async (req, res) => {
   try {
     const projects = await getProjects();
     res.json(projects);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/models', authenticateToken, async (req, res) => {
+  try {
+    const apiKey = process.env.GOOGLE_API_KEY || process.env.API_KEY;
+    if (!apiKey) {
+      // If no API key, return a default list or an error
+      return res.status(200).json({ 
+        models: [
+          { name: 'models/gemini-3.1-pro', displayName: 'Gemini 3.1 Pro', description: 'Most advanced latest model' },
+          { name: 'models/gemini-3.1-flash', displayName: 'Gemini 3.1 Flash', description: 'Fast and efficient latest model' },
+          { name: 'models/gemini-2.5-pro', displayName: 'Gemini 2.5 Pro', description: 'Advanced 2.5 model' },
+          { name: 'models/gemini-2.5-flash', displayName: 'Gemini 2.5 Flash', description: 'Fast and efficient 2.5 model' }
+        ]
+      });
+    }
+    
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.error.message || 'Failed to fetch models from Google');
+    }
+    
+    // Filter for Gemini models only
+    const geminiModels = (data.models || [])
+      .filter(model => model.name.includes('gemini'))
+      .map(model => ({
+        name: model.name,
+        displayName: model.displayName,
+        description: model.description
+      }));
+      
+    res.json({ models: geminiModels });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
