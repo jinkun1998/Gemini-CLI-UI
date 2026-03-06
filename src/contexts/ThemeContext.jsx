@@ -52,6 +52,8 @@ export const ThemeProvider = ({ children }) => {
     if (themeColorMeta) {
       if (themeName === 'gemini') {
         themeColorMeta.setAttribute('content', isDarkMode ? '#131314' : '#ffffff');
+      } else if (themeName === 'apple') {
+        themeColorMeta.setAttribute('content', isDarkMode ? '#000000' : '#f5f5f7');
       } else {
         themeColorMeta.setAttribute('content', isDarkMode ? '#0c1117' : '#ffffff');
       }

@@ -670,10 +670,11 @@ function ToolsSettings({ isOpen, onClose }) {
           <select
             value={themeName}
             onChange={(e) => setThemeName(e.target.value)}
-            className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-40"
+            className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-48"
           >
             <option value="default">Classic (CLI)</option>
             <option value="gemini">Google Gemini</option>
+            <option value="apple">Apple Liquid Glass</option>
           </select>
         </div>
       </div>
