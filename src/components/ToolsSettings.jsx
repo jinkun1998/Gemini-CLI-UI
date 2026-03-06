@@ -311,6 +311,7 @@ function ToolsSettings({ isOpen, onClose }) {
         setDisallowedTools([]);
         setSkipPermissions(false);
         setProjectSortOrder('name');
+        setSelectedModel('gemini-3.1-pro');
       }
 
       // Load MCP servers from API
@@ -322,6 +323,7 @@ function ToolsSettings({ isOpen, onClose }) {
       setDisallowedTools([]);
       setSkipPermissions(false);
       setProjectSortOrder('name');
+      setSelectedModel('gemini-3.1-pro');
     }
   };
 
