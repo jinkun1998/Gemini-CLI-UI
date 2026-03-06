@@ -117,6 +117,98 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 192 91% 46%;
   }
+
+  /* Gemini Theme - High Polish */
+  [data-theme="gemini"] {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --primary: 230 100% 67%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
+    --ring: 230 100% 67%;
+    --radius: 1.25rem;
+  }
+
+  [data-theme="gemini"].dark {
+    --background: 240 10% 4%; /* #131314 - Deep Google Dark */
+    --foreground: 0 0% 90%;
+    --card: 240 10% 6%; /* #1e1f20 - Slightly lighter for cards */
+    --card-foreground: 0 0% 90%;
+    --popover: 240 10% 4%;
+    --popover-foreground: 0 0% 90%;
+    --primary: 230 100% 67%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 240 3.7% 12%; /* #1e1f20 */
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 3.7% 12%;
+    --muted-foreground: 240 5% 64.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 230 100% 67%;
+  }
+
+  /* Chat Bubble Refinements for Gemini Theme */
+  [data-theme="gemini"] .chat-message.assistant {
+    margin-bottom: 1.5rem;
+  }
+
+  [data-theme="gemini"] .chat-message.user .bg-blue-600 {
+    background-color: #303132 !important; /* Google's user bubble color */
+    color: #e3e3e3 !important;
+    border-radius: 1.5rem !important;
+    padding: 0.75rem 1.25rem !important;
+    border: 1px solid #444746;
+  }
+
+  [data-theme="gemini"].dark .chat-message.user .bg-blue-600 {
+    background-color: #1e1f20 !important;
+    border: 1px solid #444746;
+  }
+
+  [data-theme="gemini"] .chat-input-container {
+    background-color: #f0f4f9 !important;
+    border: none !important;
+    border-radius: 2rem !important;
+    padding: 0.25rem 0.5rem !important;
+  }
+
+  [data-theme="gemini"].dark .chat-input-container {
+    background-color: #1e1f20 !important;
+    border: 1px solid #444746 !important;
+  }
+
+  [data-theme="gemini"] .chat-input-container textarea {
+    background: transparent !important;
+  }
+
+  /* Gemini-style Sidebar */
+  [data-theme="gemini"] aside {
+    background-color: #f0f4f9 !important;
+  }
+
+  [data-theme="gemini"].dark aside {
+    background-color: #1e1f20 !important;
+  }
+
+  /* Hover states for a smoother feel */
+  [data-theme="gemini"] .hover\:bg-gray-100:hover {
+    background-color: #dde3ea !important;
+  }
+
+  [data-theme="gemini"].dark .dark\:hover\:bg-gray-800:hover {
+    background-color: #333537 !important;
+  }
 }
 
 @layer base {
@@ -130,6 +222,10 @@
     /* Ensure consistent rendering */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+
+  [data-theme="gemini"] body {
+    font-family: "Google Sans", "Google Sans Text", Roboto, Arial, sans-serif;
   }
 
   html, body, #root {

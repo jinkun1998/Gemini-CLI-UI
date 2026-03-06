@@ -79,6 +79,18 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
         /* User message bubble on the right */
         <div className="flex items-end space-x-0 sm:space-x-3 w-full sm:w-auto sm:max-w-[85%] md:max-w-md lg:max-w-lg xl:max-w-xl">
           <div className="bg-blue-600 text-white rounded-2xl rounded-br-md px-3 sm:px-4 py-2 shadow-sm flex-1 sm:flex-initial">
+            {message.mentionedFiles && message.mentionedFiles.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {message.mentionedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center gap-1 px-2 py-0.5 bg-white/20 rounded text-[10px] font-medium border border-white/30 backdrop-blur-sm">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="truncate max-w-[120px]" title={file.path}>{file.name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="text-sm whitespace-pre-wrap break-words">
               {message.content}
             </div>
@@ -160,10 +172,16 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                     </button>
                   )}
                 </div>
-                {message.toolInput && message.toolName === 'Edit' && (() => {
+                {(message.toolInput && (message.toolName === 'Edit' || message.toolName === 'replace')) && (() => {
                   try {
-                    const input = JSON.parse(message.toolInput);
-                    if (input.file_path && input.old_string && input.new_string) {
+                    let input;
+                    if (typeof message.toolInput === 'string') {
+                      input = JSON.parse(message.toolInput);
+                    } else {
+                      input = message.toolInput;
+                    }
+                    
+                    if (input.file_path && input.old_string !== undefined && input.new_string !== undefined) {
                       return (
                         <details className="mt-2" open={autoExpandTools}>
                           <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
@@ -250,12 +268,12 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                     </details>
                   );
                 })()}
-                {message.toolInput && message.toolName !== 'Edit' && (() => {
+                {message.toolInput && message.toolName !== 'Edit' && message.toolName !== 'replace' && (() => {
                   // Debug log to see what we're dealing with
                   // Debug - Tool display
                   
                   // Special handling for Write tool
-                  if (message.toolName === 'Write') {
+                  if (message.toolName === 'Write' || message.toolName === 'write_file') {
                     // Debug - Write tool detected
                     try {
                       let input;
@@ -381,9 +399,14 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                   }
                   
                   // Special handling for Bash tool
-                  if (message.toolName === 'Bash') {
+                  if (message.toolName === 'Bash' || message.toolName === 'run_shell_command') {
                     try {
-                      const input = JSON.parse(message.toolInput);
+                      let input;
+                      if (typeof message.toolInput === 'string') {
+                        input = JSON.parse(message.toolInput);
+                      } else {
+                        input = message.toolInput;
+                      }
                       return (
                         <details className="mt-2" open={autoExpandTools}>
                           <summary className="text-sm text-blue-700 dark:text-blue-300 cursor-pointer hover:text-blue-800 dark:hover:text-blue-200 flex items-center gap-2">
@@ -588,7 +611,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                         }
 
                         // Special handling for interactive prompts
-                        if (content.includes('Do you want to proceed?') && message.toolName === 'Bash') {
+                        if (content.includes('Do you want to proceed?') && (message.toolName === 'Bash' || message.toolName === 'run_shell_command')) {
                           const lines = content.split('\n');
                           const promptIndex = lines.findIndex(line => line.includes('Do you want to proceed?'));
                           const beforePrompt = lines.slice(0, promptIndex).join('\n');
@@ -723,7 +746,7 @@ const MessageComponent = memo(({ message, index, prevMessage, createDiff, onFile
                         }
                         
                         // Special handling for Write tool - hide content if it's just the file content
-                        if (message.toolName === 'Write' && !message.toolResult.isError) {
+                        if ((message.toolName === 'Write' || message.toolName === 'write_file') && !message.toolResult.isError) {
                           // For Write tool, the diff is already shown in the tool input section
                           // So we just show a success message here
                           return (
@@ -1020,24 +1043,38 @@ const ImageAttachment = ({ file, onRemove, uploadProgress, error }) => {
   );
 };
 
+// Typing indicator component
+const TypingIndicator = memo(({ isDarkMode }) => {
+  return (
+    <div className="chat-message assistant px-3 sm:px-0 animate-in fade-in duration-300">
+      <div className="flex items-center space-x-2 mb-1">
+        <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0 p-0.5">
+          <GeminiLogo className="w-full h-full" />
+        </div>
+        <div className="text-xs font-medium text-gray-900 dark:text-white">
+          Gemini
+        </div>
+      </div>
+      <div className="bg-gray-100 dark:bg-gray-800 rounded-2xl rounded-bl-md px-4 py-3 shadow-sm inline-flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+        <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+        <span className="w-1.5 h-1.5 bg-gray-400 dark:bg-gray-500 rounded-full animate-bounce"></span>
+      </div>
+    </div>
+  );
+});
+
 // ChatInterface: Main chat component with Session Protection System integration
-// 
-// Session Protection System prevents automatic project updates from interrupting active conversations:
-// - onSessionActive: Called when user sends message to mark session as protected
-// - onSessionInactive: Called when conversation completes/aborts to re-enable updates
-// - onReplaceTemporarySession: Called to replace temporary session ID with real WebSocket session ID
-//
-// This ensures uninterrupted chat experience by pausing sidebar refreshes during conversations.
 function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, messages, onFileOpen, onInputFocusChange, onSessionActive, onSessionInactive, onReplaceTemporarySession, onNavigateToSession, onShowSettings, autoExpandTools, showRawParameters, autoScrollToBottom }) {
   const [input, setInput] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
-      return localStorage.getItem(`draft_input_${selectedProject.name}`) || '';
+      return localStorage.getItem(`draft_input_${selectedProject.name}_${selectedSession?.id || 'new'}`) || '';
     }
     return '';
   });
   const [chatMessages, setChatMessages] = useState(() => {
     if (typeof window !== 'undefined' && selectedProject) {
-      const saved = localStorage.getItem(`chat_messages_${selectedProject.name}`);
+      const saved = localStorage.getItem(`chat_messages_${selectedProject.name}_${selectedSession?.id || 'new'}`);
       return saved ? JSON.parse(saved) : [];
     }
     return [];
@@ -1106,6 +1143,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   const [isSystemSessionChange, setIsSystemSessionChange] = useState(false);
   const [permissionMode, setPermissionMode] = useState('');
   const [attachedImages, setAttachedImages] = useState([]);
+  const [mentionedFiles, setMentionedFiles] = useState([]); // New state for file chips
   const [uploadingImages, setUploadingImages] = useState(new Map());
   const [imageErrors, setImageErrors] = useState(new Map());
   const messagesEndRef = useRef(null);
@@ -1355,6 +1393,10 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           previousSessionIdRef.current = selectedSession.id;
           setCurrentSessionId(selectedSession.id);
           
+          // Reset loading and status states when switching sessions
+          setIsLoading(false);
+          setGeminiStatus(null);
+          
           // Only load messages from API if this is a user-initiated session change
           // For system-initiated changes, preserve existing messages and rely on WebSocket
           if (!isSystemSessionChange) {
@@ -1409,29 +1451,29 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   // Persist input draft to localStorage
   useEffect(() => {
     if (selectedProject && input !== '') {
-      localStorage.setItem(`draft_input_${selectedProject.name}`, input);
+      localStorage.setItem(`draft_input_${selectedProject.name}_${selectedSession?.id || 'new'}`, input);
     } else if (selectedProject && input === '') {
-      localStorage.removeItem(`draft_input_${selectedProject.name}`);
+      localStorage.removeItem(`draft_input_${selectedProject.name}_${selectedSession?.id || 'new'}`);
     }
-  }, [input, selectedProject]);
+  }, [input, selectedProject, selectedSession?.id]);
 
   // Persist chat messages to localStorage
   useEffect(() => {
     if (selectedProject && chatMessages.length > 0) {
-      localStorage.setItem(`chat_messages_${selectedProject.name}`, JSON.stringify(chatMessages));
+      localStorage.setItem(`chat_messages_${selectedProject.name}_${selectedSession?.id || 'new'}`, JSON.stringify(chatMessages));
     }
-  }, [chatMessages, selectedProject]);
+  }, [chatMessages, selectedProject, selectedSession?.id]);
 
   // Load saved state when project changes (but don't interfere with session loading)
   useEffect(() => {
     if (selectedProject) {
       // Always load saved input draft for the project
-      const savedInput = localStorage.getItem(`draft_input_${selectedProject.name}`) || '';
+      const savedInput = localStorage.getItem(`draft_input_${selectedProject.name}_${selectedSession?.id || 'new'}`) || '';
       if (savedInput !== input) {
         setInput(savedInput);
       }
     }
-  }, [selectedProject?.name]);
+  }, [selectedProject?.name, selectedSession?.id]);
 
   // Update YOLO mode when settings change
   useEffect(() => {
@@ -1480,6 +1522,28 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       const latestMessage = messages[messages.length - 1];
       // console.log('Received WebSocket message:', latestMessage.type, latestMessage);
       
+      // Helper function to check if the message belongs to the current session
+      const isForCurrentSession = (msgSessionId) => {
+        const pendingSessionId = sessionStorage.getItem('pendingSessionId');
+        
+        // If message doesn't have a session ID, assume it's for the current one (legacy fallback)
+        if (!msgSessionId) return true; 
+        
+        // If we have an active current session
+        if (currentSessionId) {
+          return msgSessionId === currentSessionId || msgSessionId === pendingSessionId;
+        }
+        
+        // If NO current session (New Chat state) but we have a pending one being created
+        if (pendingSessionId) {
+          return msgSessionId === pendingSessionId;
+        }
+        
+        // No current session, no pending session. User is on a blank new chat.
+        // Ignore any incoming messages that have a session ID, as they belong to background chats.
+        return false;
+      };
+
       switch (latestMessage.type) {
         case 'session-created':
           // New session created by Gemini CLI - we receive the real session ID here
@@ -1497,7 +1561,9 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           break;
           
         case 'gemini-response':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           const messageData = latestMessage.data.message || latestMessage.data;
+          const isPartial = latestMessage.data.isPartial || false;
           
           // Handle Gemini CLI session duplication bug workaround:
           // When resuming a session, Gemini CLI creates a new session instead of resuming.
@@ -1509,17 +1575,14 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               currentSessionId && 
               latestMessage.data.session_id !== currentSessionId) {
             
-            // Debug - Gemini CLI session duplication detected
-            
             // Mark this as a system-initiated session change to preserve messages
             setIsSystemSessionChange(true);
             
             // Switch to the new session using React Router navigation
-            // This triggers the session loading logic in App.jsx without a page reload
             if (onNavigateToSession) {
               onNavigateToSession(latestMessage.data.session_id);
             }
-            return; // Don't process the message further, let the navigation handle it
+            return;
           }
           
           // Handle system/init for new sessions (when currentSessionId is null)
@@ -1528,8 +1591,6 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               latestMessage.data.session_id && 
               !currentSessionId) {
             
-            // Debug - New session init detected
-            
             // Mark this as a system-initiated session change to preserve messages
             setIsSystemSessionChange(true);
             
@@ -1537,7 +1598,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
             if (onNavigateToSession) {
               onNavigateToSession(latestMessage.data.session_id);
             }
-            return; // Don't process the message further, let the navigation handle it
+            return;
           }
           
           // For system/init messages that match current session, just ignore them
@@ -1546,82 +1607,114 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
               latestMessage.data.session_id && 
               currentSessionId && 
               latestMessage.data.session_id === currentSessionId) {
-            // Debug - System init message for current session, ignoring
-            return; // Don't process the message further
+            return;
           }
           
-          // Handle different types of content in the response
-          if (Array.isArray(messageData.content)) {
-            for (const part of messageData.content) {
-              if (part.type === 'tool_use') {
-                // Add tool use message
-                const toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
-                setChatMessages(prev => [...prev, {
-                  type: 'assistant',
-                  content: '',
-                  timestamp: new Date(),
-                  isToolUse: true,
-                  toolName: part.name,
-                  toolInput: toolInput,
-                  toolId: part.id,
-                  toolResult: null // Will be updated when result comes in
-                }]);
-                
-                // Trigger file refresh for file-related operations
-                if (['Write', 'write_file', 'Edit', 'MultiEdit', 'Create', 'Delete'].includes(part.name)) {
-                  console.log(`File operation detected: ${part.name}`);
-                  // Dispatch custom event for FileTree to refresh
-                  setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('file-operation', {
-                      detail: { 
-                        toolName: part.name,
-                        projectName: selectedProject?.name
-                      }
-                    }));
-                  }, 500); // Small delay to ensure file operation completes
+          // Update chat messages with real-time support
+          setChatMessages(prev => {
+            const newMessages = [...prev];
+            const lastMessage = newMessages[newMessages.length - 1];
+            
+            // Handle text content
+            if (typeof messageData.content === 'string' && messageData.content.trim()) {
+              // If last message is an assistant text message and we're receiving more text, append or replace
+              if (lastMessage && lastMessage.type === 'assistant' && !lastMessage.isToolUse && !lastMessage.isInteractivePrompt) {
+                if (isPartial) {
+                  // For partials, we might want to append if it's a stream, 
+                  // but our backend handler currently sends the full buffer so far.
+                  // So we replace the content with the latest buffer.
+                  return [
+                    ...newMessages.slice(0, -1),
+                    { ...lastMessage, content: messageData.content, timestamp: new Date() }
+                  ];
+                } else {
+                  // Final message - replace content
+                  return [
+                    ...newMessages.slice(0, -1),
+                    { ...lastMessage, content: messageData.content, timestamp: new Date() }
+                  ];
                 }
-              } else if (part.type === 'text' && part.text?.trim()) {
-                // Add regular text message
-                setChatMessages(prev => [...prev, {
+              } else {
+                // New assistant message
+                return [...newMessages, {
                   type: 'assistant',
-                  content: part.text,
+                  content: messageData.content,
                   timestamp: new Date()
-                }]);
+                }];
               }
             }
-          } else if (typeof messageData.content === 'string' && messageData.content.trim()) {
-            // Add regular text message
-            setChatMessages(prev => [...prev, {
-              type: 'assistant',
-              content: messageData.content,
-              timestamp: new Date()
-            }]);
-          }
-          
-          // Handle tool results from user messages (these come separately)
-          if (messageData.role === 'user' && Array.isArray(messageData.content)) {
-            for (const part of messageData.content) {
-              if (part.type === 'tool_result') {
-                // Find the corresponding tool use and update it with the result
-                setChatMessages(prev => prev.map(msg => {
-                  if (msg.isToolUse && msg.toolId === part.tool_use_id) {
-                    return {
-                      ...msg,
-                      toolResult: {
-                        content: part.content,
-                        isError: part.is_error,
-                        timestamp: new Date()
-                      }
-                    };
+            
+            // Handle array content (tool use, etc.)
+            if (Array.isArray(messageData.content)) {
+              let updatedMessages = [...newMessages];
+              
+              for (const part of messageData.content) {
+                if (part.type === 'tool_use') {
+                  const toolInput = part.input ? JSON.stringify(part.input, null, 2) : '';
+                  updatedMessages.push({
+                    type: 'assistant',
+                    content: '',
+                    timestamp: new Date(),
+                    isToolUse: true,
+                    toolName: part.name,
+                    toolInput: toolInput,
+                    toolId: part.id,
+                    toolResult: null
+                  });
+                  
+                  // Trigger file refresh
+                  if (['Write', 'write_file', 'Edit', 'MultiEdit', 'Create', 'Delete'].includes(part.name)) {
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('file-operation', {
+                        detail: { toolName: part.name, projectName: selectedProject?.name }
+                      }));
+                    }, 500);
                   }
-                  return msg;
-                }));
+                } else if (part.type === 'text' && part.text?.trim()) {
+                  // Check if we should append to the last text message
+                  const last = updatedMessages[updatedMessages.length - 1];
+                  if (last && last.type === 'assistant' && !last.isToolUse && !last.isInteractivePrompt) {
+                    updatedMessages[updatedMessages.length - 1] = {
+                      ...last,
+                      content: part.text,
+                      timestamp: new Date()
+                    };
+                  } else {
+                    updatedMessages.push({
+                      type: 'assistant',
+                      content: part.text,
+                      timestamp: new Date()
+                    });
+                  }
+                }
               }
+              return updatedMessages;
             }
-          }
+            
+            // Handle tool results
+            if (messageData.role === 'user' && Array.isArray(messageData.content)) {
+              return prev.map(msg => {
+                const resultPart = messageData.content.find(p => p.type === 'tool_result');
+                if (resultPart && msg.isToolUse && msg.toolId === resultPart.tool_use_id) {
+                  return {
+                    ...msg,
+                    toolResult: {
+                      content: resultPart.content,
+                      isError: resultPart.is_error,
+                      timestamp: new Date()
+                    }
+                  };
+                }
+                return msg;
+              });
+            }
+            
+            return prev;
+          });
           break;
           
         case 'gemini-output':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           setChatMessages(prev => [...prev, {
             type: 'assistant',
             content: latestMessage.data,
@@ -1639,6 +1732,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           break;
 
         case 'gemini-error':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           // console.log('Gemini error, setting isLoading to false:', latestMessage.error);
           setChatMessages(prev => [...prev, {
             type: 'error',
@@ -1651,6 +1745,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           break;
           
         case 'gemini-complete':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           // console.log('Gemini completed, setting isLoading to false');
           setIsLoading(false);
           setCanAbortSession(false);
@@ -1676,11 +1771,12 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           
           // Clear persisted chat messages after successful completion
           if (selectedProject && latestMessage.exitCode === 0) {
-            localStorage.removeItem(`chat_messages_${selectedProject.name}`);
+            localStorage.removeItem(`chat_messages_${selectedProject.name}_${selectedSession?.id || 'new'}`);
           }
           break;
           
         case 'session-aborted':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           setIsLoading(false);
           setCanAbortSession(false);
           setGeminiStatus(null);
@@ -1699,6 +1795,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           break;
 
         case 'gemini-status':
+          if (!isForCurrentSession(latestMessage.sessionId)) return;
           // Handle Gemini working status messages
           // Debug - Received gemini-status message
           const statusData = latestMessage.data;
@@ -1800,21 +1897,31 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
   // Handle @ symbol detection and file filtering
   useEffect(() => {
+    if (!input || cursorPosition === undefined) {
+      setShowFileDropdown(false);
+      setAtSymbolPosition(-1);
+      return;
+    }
+
     const textBeforeCursor = input.slice(0, cursorPosition);
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    // Use regex to find the last @ that is either at start of string or preceded by space
+    const atMatches = [...textBeforeCursor.matchAll(/(?:^|\s)@/g)];
+    const lastMatch = atMatches.length > 0 ? atMatches[atMatches.length - 1] : null;
+    const lastAtIndex = lastMatch ? lastMatch.index + (lastMatch[0].startsWith(' ') ? 1 : 0) : -1;
     
     if (lastAtIndex !== -1) {
       const textAfterAt = textBeforeCursor.slice(lastAtIndex + 1);
       // Check if there's a space after the @ symbol (which would end the file reference)
-      if (!textAfterAt.includes(' ')) {
+      if (!textAfterAt.includes(' ') && !textAfterAt.includes('\n')) {
         setAtSymbolPosition(lastAtIndex);
         setShowFileDropdown(true);
         
         // Filter files based on the text after @
+        const query = textAfterAt.toLowerCase();
         const filtered = fileList.filter(file => 
-          file.name.toLowerCase().includes(textAfterAt.toLowerCase()) ||
-          file.path.toLowerCase().includes(textAfterAt.toLowerCase())
-        ).slice(0, 10); // Limit to 10 results
+          file.name.toLowerCase().includes(query) ||
+          file.path.toLowerCase().includes(query)
+        ).slice(0, 15); // Show up to 15 results
         
         setFilteredFiles(filtered);
         setSelectedFileIndex(-1);
@@ -2047,6 +2154,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
       type: 'user',
       content: input,
       images: uploadedImages,
+      mentionedFiles: [...mentionedFiles], // Store mentioned files in message
       timestamp: new Date()
     };
 
@@ -2101,10 +2209,17 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
     const toolsSettings = getToolsSettings();
 
+    // Prepare full command by appending mentioned files if any
+    let finalCommand = input;
+    if (mentionedFiles.length > 0) {
+      const fileRefs = mentionedFiles.map(f => `@${f.path}`).join(' ');
+      finalCommand = `${fileRefs}\n\n${input}`;
+    }
+
     // Send command to Gemini CLI via WebSocket with images
     sendMessage({
       type: 'gemini-command',
-      command: input,
+      command: finalCommand,
       options: {
         projectPath: selectedProject.path,
         cwd: selectedProject.path,
@@ -2119,6 +2234,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
 
     setInput('');
     setAttachedImages([]);
+    setMentionedFiles([]); // Clear mentioned files
     setUploadingImages(new Map());
     setImageErrors(new Map());
     setIsTextareaExpanded(false);
@@ -2132,7 +2248,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     
     // Clear the saved draft since message was sent
     if (selectedProject) {
-      localStorage.removeItem(`draft_input_${selectedProject.name}`);
+      localStorage.removeItem(`draft_input_${selectedProject.name}_${selectedSession?.id || 'new'}`);
     }
   };
 
@@ -2198,16 +2314,27 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
   };
 
   const selectFile = (file) => {
+    if (atSymbolPosition === -1) return;
+
     const textBeforeAt = input.slice(0, atSymbolPosition);
-    const textAfterAtQuery = input.slice(atSymbolPosition);
-    const spaceIndex = textAfterAtQuery.indexOf(' ');
-    const textAfterQuery = spaceIndex !== -1 ? textAfterAtQuery.slice(spaceIndex) : '';
+    const textAfterAt = input.slice(atSymbolPosition);
     
-    const newInput = textBeforeAt + '@' + file.path + ' ' + textAfterQuery;
-    const newCursorPos = textBeforeAt.length + 1 + file.path.length + 1;
+    // Find where the mention query ends (first space or newline after the @)
+    const mentionEndMatch = textAfterAt.match(/\s/);
+    const mentionEndIndex = mentionEndMatch ? mentionEndMatch.index : textAfterAt.length;
+    const textAfterQuery = textAfterAt.slice(mentionEndIndex);
+    
+    // Add file to chips if not already present
+    if (!mentionedFiles.find(f => f.path === file.path)) {
+      setMentionedFiles(prev => [...prev, file]);
+    }
+    
+    // Insert @filename into the text
+    const newInput = textBeforeAt + '@' + file.name + ' ' + (textAfterQuery.startsWith(' ') ? textAfterQuery.slice(1) : textAfterQuery);
+    const newCursorPos = textBeforeAt.length + 1 + file.name.length + 1;
     
     // Immediately ensure focus is maintained
-    if (textareaRef.current && !textareaRef.current.matches(':focus')) {
+    if (textareaRef.current) {
       textareaRef.current.focus();
     }
     
@@ -2220,18 +2347,16 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
     setAtSymbolPosition(-1);
     
     // Set cursor position synchronously 
-    if (textareaRef.current) {
-      // Use requestAnimationFrame for smoother updates
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
-          // Ensure focus is maintained
-          if (!textareaRef.current.matches(':focus')) {
-            textareaRef.current.focus();
-          }
-        }
-      });
-    }
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        textareaRef.current.focus();
+        
+        // Adjust textarea height
+        textareaRef.current.style.height = 'auto';
+        textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+      }
+    }, 0);
   };
 
   const handleInputChange = (e) => {
@@ -2379,27 +2504,7 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           </>
         )}
         
-        {isLoading && (
-          <div className="chat-message assistant">
-            <div className="w-full">
-              <div className="flex items-center space-x-3 mb-2">
-                <div className="w-8 h-8 bg-gray-600 rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
-                  G
-                </div>
-                <div className="text-sm font-medium text-gray-900 dark:text-white">Gemini</div>
-                {/* Abort button removed - functionality not yet implemented at backend */}
-              </div>
-              <div className="w-full text-sm text-gray-500 dark:text-gray-400 pl-3 sm:pl-0">
-                <div className="flex items-center space-x-1">
-                  <div className="animate-pulse">●</div>
-                  <div className="animate-pulse" style={{ animationDelay: '0.2s' }}>●</div>
-                  <div className="animate-pulse" style={{ animationDelay: '0.4s' }}>●</div>
-                  <span className="ml-2">Thinking...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {isLoading && <TypingIndicator isDarkMode={document.documentElement.classList.contains('dark')} />}
         
         <div ref={messagesEndRef} />
       </div>
@@ -2501,21 +2606,36 @@ function ChatInterface({ selectedProject, selectedSession, ws, sendMessage, mess
           )}
           
           {/* Image attachments preview */}
-          {attachedImages.length > 0 && (
-            <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
-              <div className="flex flex-wrap gap-2">
-                {attachedImages.map((file, index) => (
-                  <ImageAttachment
-                    key={index}
-                    file={file}
-                    onRemove={() => {
-                      setAttachedImages(prev => prev.filter((_, i) => i !== index));
-                    }}
-                    uploadProgress={uploadingImages.get(file.name)}
-                    error={imageErrors.get(file.name)}
-                  />
-                ))}
-              </div>
+          {(attachedImages.length > 0 || mentionedFiles.length > 0) && (
+            <div className="mb-2 p-2 bg-gray-50 dark:bg-gray-800 rounded-lg flex flex-wrap gap-2">
+              {attachedImages.map((file, index) => (
+                <ImageAttachment
+                  key={index}
+                  file={file}
+                  onRemove={() => {
+                    setAttachedImages(prev => prev.filter((_, i) => i !== index));
+                  }}
+                  uploadProgress={uploadingImages.get(file.name)}
+                  error={imageErrors.get(file.name)}
+                />
+              ))}
+              {mentionedFiles.map((file, index) => (
+                <div key={file.path} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium border border-blue-200 dark:border-blue-800 animate-slideInRight" title={file.path}>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="truncate max-w-[150px]">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMentionedFiles(prev => prev.filter((_, i) => i !== index))}
+                    className="hover:text-blue-900 dark:hover:text-blue-100 transition-colors ml-1"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
           )}
           

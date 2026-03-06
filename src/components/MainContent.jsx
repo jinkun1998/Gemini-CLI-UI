@@ -39,7 +39,8 @@ function MainContent({
   onShowSettings,         // Show tools settings panel
   autoExpandTools,        // Auto-expand tool accordions
   showRawParameters,      // Show raw parameters in tool accordions
-  autoScrollToBottom      // Auto-scroll to bottom when new messages arrive
+  autoScrollToBottom,      // Auto-scroll to bottom when new messages arrive
+  isConnected             // Backend connection status
 }) {
   const [editingFile, setEditingFile] = useState(null);
 

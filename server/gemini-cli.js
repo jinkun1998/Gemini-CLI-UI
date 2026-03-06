@@ -103,6 +103,18 @@ async function spawnGemini(command, options = {}, ws) {
     if (settings.skipPermissions) {
       args.push('--yolo');
     }
+
+    // Add allowed tools
+    const allowedTools = settings.allowedTools && settings.allowedTools.length > 0 
+      ? settings.allowedTools 
+      : [
+          'Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash',
+          'read_file', 'write_file', 'replace', 'grep_search', 'glob', 'run_shell_command', 'web_fetch', 'google_web_search'
+        ]; // Default allowed tools for better UX
+    
+    if (allowedTools.length > 0) {
+      args.push('--allowed-tools', allowedTools.join(','));
+    }
     
     const geminiPath = process.env.GEMINI_PATH || 'gemini';
     const geminiProcess = spawn(geminiPath, args, {
@@ -123,8 +135,10 @@ async function spawnGemini(command, options = {}, ws) {
     const timeoutMs = 30000;
     const timeout = setTimeout(() => {
       if (!hasReceivedOutput && !quotaReached) {
+        const currentId = capturedSessionId || sessionId || processKey;
         ws.send(JSON.stringify({
           type: 'gemini-error',
+          sessionId: currentId,
           error: 'Gemini CLI timeout - no response received'
         }));
         geminiProcess.kill('SIGTERM');
@@ -167,18 +181,6 @@ async function spawnGemini(command, options = {}, ws) {
       
       const filteredOutput = filteredLines.join('\n').trim();
       
-      if (filteredOutput) {
-        fullResponse += (fullResponse ? '\n' : '') + filteredOutput;
-        if (responseHandler) {
-          responseHandler.processData(filteredOutput);
-        } else {
-          ws.send(JSON.stringify({
-            type: 'gemini-response',
-            data: { type: 'message', content: filteredOutput }
-          }));
-        }
-      }
-      
       if (!sessionId && !sessionCreatedSent && !capturedSessionId) {
         capturedSessionId = `gemini_${Date.now()}`;
         sessionCreatedSent = true;
@@ -189,6 +191,20 @@ async function spawnGemini(command, options = {}, ws) {
           activeGeminiProcesses.set(capturedSessionId, geminiProcess);
         }
         ws.send(JSON.stringify({ type: 'session-created', sessionId: capturedSessionId }));
+      }
+
+      if (filteredOutput) {
+        fullResponse += (fullResponse ? '\n' : '') + filteredOutput;
+        const currentId = capturedSessionId || sessionId || processKey;
+        if (responseHandler) {
+          responseHandler.processData(filteredOutput, currentId);
+        } else {
+          ws.send(JSON.stringify({
+            type: 'gemini-response',
+            sessionId: currentId,
+            data: { type: 'message', content: filteredOutput }
+          }));
+        }
       }
     });
     
@@ -207,6 +223,7 @@ async function spawnGemini(command, options = {}, ws) {
           errorMsg.includes('400') ||
           errorMsg.includes('INVALID_ARGUMENT') ||
           errorMsg.includes('Thinking_config.include_thoughts') ||
+          errorMsg.includes('No capacity available') ||
           errorMsg.includes('An unexpected critical error occurred')) {
         quotaReached = true; 
         clearTimeout(timeout); // Clear timeout immediately on recognized fatal error
@@ -216,6 +233,8 @@ async function spawnGemini(command, options = {}, ws) {
       // 2. Filter out noisy but non-fatal internal messages (don't show to user, don't trigger fallback)
       if (errorMsg.includes('Approval mode "plan" is only available') ||
           errorMsg.includes('Falling back to "default"') ||
+          errorMsg.includes('--allowed-tools cli argument and tools.allowed in settings.json are deprecated') ||
+          errorMsg.includes('Migrate to Policy Engine') ||
           errorMsg.includes('[DEP0040]') || 
           errorMsg.includes('DeprecationWarning') ||
           errorMsg.includes('--trace-deprecation') ||
@@ -223,7 +242,8 @@ async function spawnGemini(command, options = {}, ws) {
         return;
       }
       
-      ws.send(JSON.stringify({ type: 'gemini-error', error: errorMsg }));
+      const currentId = capturedSessionId || sessionId || processKey;
+      ws.send(JSON.stringify({ type: 'gemini-error', sessionId: currentId, error: errorMsg }));
     });
     
     geminiProcess.on('close', async (code) => {
@@ -243,6 +263,7 @@ async function spawnGemini(command, options = {}, ws) {
           // Send status to UI so it can update the model selector silently
           ws.send(JSON.stringify({
             type: 'gemini-status',
+            sessionId: finalSessionId,
             data: { 
               message: 'Optimizing...', 
               fallbackModel: nextModel 
@@ -267,6 +288,7 @@ async function spawnGemini(command, options = {}, ws) {
       
       ws.send(JSON.stringify({
         type: 'gemini-complete',
+        sessionId: finalSessionId,
         exitCode: code,
         isNewSession: !sessionId && !!command
       }));
@@ -287,7 +309,7 @@ async function spawnGemini(command, options = {}, ws) {
     geminiProcess.on('error', (error) => {
       const finalSessionId = capturedSessionId || sessionId || processKey;
       activeGeminiProcesses.delete(finalSessionId);
-      ws.send(JSON.stringify({ type: 'gemini-error', error: error.message }));
+      ws.send(JSON.stringify({ type: 'gemini-error', sessionId: finalSessionId, error: error.message }));
       reject(error);
     });
   });

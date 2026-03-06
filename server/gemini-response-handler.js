@@ -31,7 +31,8 @@ class GeminiResponseHandler {
   }
 
   // Process incoming data from Gemini
-  processData(data) {
+  processData(data, sessionId) {
+    this.currentSessionId = sessionId;
     // Add to buffer
     this.buffer += data;
     
@@ -149,6 +150,7 @@ class GeminiResponseHandler {
     if (content) {
       this.ws.send(JSON.stringify({
         type: 'gemini-response',
+        sessionId: this.currentSessionId,
         data: {
           type: 'message',
           content: content,

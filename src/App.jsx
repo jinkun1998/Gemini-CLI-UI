@@ -71,7 +71,7 @@ function AppContent() {
   // until the conversation completes or is aborted.
   const [activeSessions, setActiveSessions] = useState(new Set()); // Track sessions with active conversations
   
-  const { ws, sendMessage, messages } = useWebSocket();
+  const { ws, sendMessage, messages, isConnected } = useWebSocket();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -536,6 +536,7 @@ function AppContent() {
               latestVersion={latestVersion}
               currentVersion={currentVersion}
               onShowVersionModal={() => setShowVersionModal(true)}
+              isConnected={isConnected}
             />
           </div>
         </div>
@@ -569,6 +570,7 @@ function AppContent() {
               projects={projects}
               selectedProject={selectedProject}
               selectedSession={selectedSession}
+              activeSessions={activeSessions}
               onProjectSelect={handleProjectSelect}
               onSessionSelect={handleSessionSelect}
               onNewSession={handleNewSession}
@@ -576,7 +578,11 @@ function AppContent() {
               onProjectDelete={handleProjectDelete}
               isLoading={isLoadingProjects}
               onRefresh={handleSidebarRefresh}
-              onShowSettings={() => setShowToolsSettings(true)}
+              isConnected={isConnected}
+              isMobile={true}
+              onCloseMobile={() => {
+                setSidebarOpen(false);
+              }}
               updateAvailable={updateAvailable}
               latestVersion={latestVersion}
               currentVersion={currentVersion}
@@ -608,6 +614,7 @@ function AppContent() {
           autoExpandTools={autoExpandTools}
           showRawParameters={showRawParameters}
           autoScrollToBottom={autoScrollToBottom}
+          isConnected={isConnected}
         />
       </div>
 

@@ -7,7 +7,7 @@ import { X, Plus, Settings, Shield, AlertTriangle, Moon, Sun, Server, Edit3, Tra
 import { useTheme } from '../contexts/ThemeContext';
 
 function ToolsSettings({ isOpen, onClose }) {
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { isDarkMode, toggleDarkMode, themeName, setThemeName } = useTheme();
   const [allowedTools, setAllowedTools] = useState([]);
   const [disallowedTools, setDisallowedTools] = useState([]);
   const [newAllowedTool, setNewAllowedTool] = useState('');
@@ -654,6 +654,27 @@ function ToolsSettings({ isOpen, onClose }) {
               )}
             </span>
           </button>
+        </div>
+      </div>
+
+      <div className="bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium text-foreground">
+              Theme Style
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Choose the visual style of the interface
+            </div>
+          </div>
+          <select
+            value={themeName}
+            onChange={(e) => setThemeName(e.target.value)}
+            className="text-sm bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2 w-40"
+          >
+            <option value="default">Classic (CLI)</option>
+            <option value="gemini">Google Gemini</option>
+          </select>
         </div>
       </div>
     </div>

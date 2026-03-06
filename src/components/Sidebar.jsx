@@ -35,12 +35,13 @@ const formatTimeAgo = (dateString, currentTime) => {
   return date.toLocaleDateString();
 };
 
-const Sidebar = memo(function Sidebar({ 
-  projects, 
-  selectedProject, 
-  selectedSession, 
-  onProjectSelect, 
-  onSessionSelect, 
+const Sidebar = memo(function Sidebar({
+  projects,
+  selectedProject,
+  selectedSession,
+  activeSessions,
+  onProjectSelect,
+  onSessionSelect,
   onNewSession,
   onSessionDelete,
   onProjectDelete,
@@ -50,7 +51,7 @@ const Sidebar = memo(function Sidebar({
   updateAvailable,
   latestVersion,
   currentVersion,
-  onShowVersionModal
+  onShowVersionModal,  isConnected
 }) {
   const [expandedProjects, setExpandedProjects] = useState(new Set());
   const [editingProject, setEditingProject] = useState(null);
@@ -442,6 +443,23 @@ const Sidebar = memo(function Sidebar({
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''} group-hover:rotate-180 transition-transform duration-300`} />
             </Button>
+
+            {/* Connection Status Indicator - Circular */}
+            <div 
+              className={cn(
+                "w-9 h-9 rounded-md flex items-center justify-center border shadow-sm transition-all duration-300 flex-shrink-0",
+                isConnected 
+                  ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/30"
+                  : "bg-red-50/50 dark:bg-red-900/10 border-red-200/50 dark:border-red-800/30"
+              )}
+              title={isConnected ? "Backend Connected" : "Backend Disconnected"}
+            >
+              <div className={cn(
+                "w-2.5 h-2.5 rounded-full shadow-sm",
+                isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
+              )} />
+            </div>
+
             <Button
               variant="default"
               size="sm"
@@ -466,7 +484,23 @@ const Sidebar = memo(function Sidebar({
                 <p className="text-sm text-muted-foreground">Projects</p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              {/* Connection Status Indicator - Circular */}
+              <div 
+                className={cn(
+                  "w-8 h-8 rounded-md flex items-center justify-center border shadow-sm transition-all duration-300 flex-shrink-0",
+                  isConnected 
+                    ? "bg-green-50/50 dark:bg-green-900/10 border-green-200/50 dark:border-green-800/30"
+                    : "bg-red-50/50 dark:bg-red-900/10 border-red-200/50 dark:border-red-800/30"
+                )}
+                title={isConnected ? "Backend Connected" : "Backend Disconnected"}
+              >
+                <div className={cn(
+                  "w-2 h-2 rounded-full",
+                  isConnected ? "bg-green-500 animate-pulse" : "bg-red-500"
+                )} />
+              </div>
+              
               <button
                 className="w-8 h-8 rounded-md bg-background border border-border flex items-center justify-center active:scale-95 transition-all duration-150"
                 onClick={async () => {
@@ -996,18 +1030,12 @@ const Sidebar = memo(function Sidebar({
                           
                           return (
                           <div key={session.id} className="group relative">
-                            {/* Active session indicator dot */}
-                            {isActive && (
-                              <div className="absolute left-0 top-1/2 transform -translate-y-1/2 -translate-x-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                              </div>
-                            )}
                             {/* Mobile Session Item */}
                             <div className="md:hidden">
                               <div
                                 className={cn(
-                                  "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative",
-                                  selectedSession?.id === session.id ? "bg-primary/5 border-primary/20" :
+                                  "p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative overflow-hidden",
+                                  selectedSession?.id === session.id ? "bg-primary/10 border-primary/30" :
                                   isActive ? "border-green-500/30 bg-green-50/5 dark:bg-green-900/5" : "border-border/30"
                                 )}
                                 onClick={() => {
@@ -1019,42 +1047,53 @@ const Sidebar = memo(function Sidebar({
                                   onSessionSelect(session);
                                 })}
                               >
+                                {selectedSession?.id === session.id && (
+                                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+                                )}
                                 <div className="flex items-center gap-2">
                                   <div className={cn(
-                                    "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0",
+                                    "w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0 relative",
                                     selectedSession?.id === session.id ? "bg-primary/10" : "bg-muted/50"
                                   )}>
                                     <MessageSquare className={cn(
-                                      "w-3 h-3",
-                                      selectedSession?.id === session.id ? "text-primary" : "text-muted-foreground"
+                                      "w-3 h-3 transition-colors",
+                                      selectedSession?.id === session.id ? "text-primary" : "text-muted-foreground",
+                                      activeSessions?.has(session.id) ? "animate-pulse text-amber-500" : ""
                                     )} />
+                                    {isActive && !activeSessions?.has(session.id) && (
+                                      <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full border border-background animate-pulse" />
+                                    )}
                                   </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="text-xs font-medium truncate text-foreground">
-                                      {session.summary || 'New Session'}
-                                    </div>
-                                    <div className="flex items-center gap-1 mt-0.5">
-                                      <Clock className="w-2.5 h-2.5 text-muted-foreground" />
-                                      <span className="text-xs text-muted-foreground">
-                                        {formatTimeAgo(session.lastActivity, currentTime)}
-                                      </span>
+                                    <div className="flex items-center gap-2 pr-4">
                                       {session.messageCount > 0 && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
+                                        <Badge variant="secondary" className="text-[10px] px-1 py-0 flex-shrink-0 bg-primary/10 text-primary border-none">
                                           {session.messageCount}
                                         </Badge>
                                       )}
+                                      <div className="text-xs font-medium truncate text-foreground">
+                                        {session.summary || 'New Session'}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center mt-0.5">
+                                      <div className="flex items-center gap-1 min-w-0">
+                                        <Clock className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" />
+                                        <span className="text-[10px] text-muted-foreground truncate">
+                                          {formatTimeAgo(session.lastActivity, currentTime)}
+                                        </span>
+                                      </div>
                                     </div>
                                   </div>
                                   {/* Mobile delete button */}
                                   <button
-                                    className="w-5 h-5 rounded-md bg-red-50 dark:bg-red-900/20 flex items-center justify-center active:scale-95 transition-transform opacity-70 ml-1"
+                                    className="w-7 h-7 rounded-md bg-red-50 dark:bg-red-900/20 flex items-center justify-center active:scale-95 transition-transform opacity-70 ml-1 flex-shrink-0"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       deleteSession(project.name, session.id);
                                     }}
                                     onTouchEnd={handleTouchClick(() => deleteSession(project.name, session.id))}
                                   >
-                                    <Trash2 className="w-2.5 h-2.5 text-red-600 dark:text-red-400" />
+                                    <Trash2 className="w-3 h-3 text-red-600 dark:text-red-400" />
                                   </button>
                                 </div>
                               </div>
@@ -1065,28 +1104,43 @@ const Sidebar = memo(function Sidebar({
                               <Button
                                 variant="ghost"
                                 className={cn(
-                                  "w-full justify-start p-2 h-auto font-normal text-left hover:bg-accent/50 transition-colors duration-200",
-                                  selectedSession?.id === session.id && "bg-accent text-accent-foreground"
+                                  "w-full justify-start p-2 pr-24 h-auto font-normal text-left transition-all duration-200 relative group/session overflow-hidden",
+                                  selectedSession?.id === session.id 
+                                    ? "bg-primary/10 text-primary hover:bg-primary/15" 
+                                    : "hover:bg-accent/50 text-muted-foreground hover:text-foreground"
                                 )}
                                 onClick={() => onSessionSelect(session)}
                                 onTouchEnd={handleTouchClick(() => onSessionSelect(session))}
                               >
+                                {selectedSession?.id === session.id && (
+                                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />
+                                )}
                                 <div className="flex items-start gap-2 min-w-0 w-full">
-                                  <MessageSquare className="w-3 h-3 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                  <div className="relative mt-0.5 flex-shrink-0">
+                                    <MessageSquare className={cn(
+                                      "w-3 h-3 transition-colors",
+                                      activeSessions?.has(session.id) ? "animate-pulse text-amber-500" : "text-muted-foreground"
+                                    )} />
+                                    {isActive && !activeSessions?.has(session.id) && (
+                                      <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-green-500 rounded-full border border-background animate-pulse" />
+                                    )}
+                                  </div>
                                   <div className="min-w-0 flex-1">
-                                    <div className="text-xs font-medium truncate text-foreground">
-                                      {session.summary || 'New Session'}
+                                    <div className="flex items-center gap-2 pr-2">
+                                      {session.messageCount > 0 && (
+                                        <Badge variant="secondary" className="text-[10px] px-1 py-0 flex-shrink-0 bg-primary/10 text-primary border-none">
+                                          {session.messageCount}
+                                        </Badge>
+                                      )}
+                                      <div className="text-xs font-medium truncate text-foreground">
+                                        {session.summary || 'New Session'}
+                                      </div>
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5">
                                       <Clock className="w-2.5 h-2.5 text-muted-foreground" />
                                       <span className="text-xs text-muted-foreground">
                                         {formatTimeAgo(session.lastActivity, currentTime)}
                                       </span>
-                                      {session.messageCount > 0 && (
-                                        <Badge variant="secondary" className="text-xs px-1 py-0 ml-auto">
-                                          {session.messageCount}
-                                        </Badge>
-                                      )}
                                     </div>
                                   </div>
                                 </div>
