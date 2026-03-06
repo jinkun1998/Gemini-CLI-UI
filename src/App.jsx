@@ -244,7 +244,8 @@ function AppContent() {
     return () => window.removeEventListener('gemini-refresh-projects', handleRefresh);
   }, []);
 
-  // Handle URL-based session loading  useEffect(() => {
+  // Handle URL-based session loading
+  useEffect(() => {
     if (sessionId && projects.length > 0) {
       // Only switch tabs on initial load, not on every project update
       const shouldSwitchTab = !selectedSession || selectedSession.id !== sessionId;

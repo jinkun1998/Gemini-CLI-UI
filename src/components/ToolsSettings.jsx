@@ -65,8 +65,6 @@ function ToolsSettings({ isOpen, onClose }) {
     'WebSearch'
   ];
   
-  // Available Gemini models (tested and verified)
-  
   // MCP API functions
   const fetchModels = async () => {
     try {

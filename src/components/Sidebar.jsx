@@ -1310,6 +1310,6 @@ const Sidebar = memo(function Sidebar({
       </div>
     </div>
   );
-}
+});
 
 export default Sidebar;
