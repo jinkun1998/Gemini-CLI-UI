@@ -1,0 +1,21 @@
+{
+  "id": "0c99553d-d4f0-4461-a162-0c029ee36ab7",
+  "title": "hello world",
+  "messages": [
+    {
+      "role": "user",
+      "content": "hello world"
+    },
+    {
+      "role": "user",
+      "content": "hello world"
+    },
+    {
+      "role": "user",
+      "content": "hello world"
+    }
+  ],
+  "geminiSessionId": null,
+  "model": "gemini-3.1-pro-preview",
+  "updatedAt": "2026-03-10T09:09:22.536Z"
+}
