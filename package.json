@@ -5,6 +5,7 @@
     "apps/*"
   ],
   "scripts": {
+    "predev": "fuser -k 4000/tcp 5173/tcp || true",
     "dev": "concurrently \"npm run dev -w api\" \"npm run dev -w web\"",
     "build": "npm run build -w web"
   },

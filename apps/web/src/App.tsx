@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Paperclip, Send, Folder, MessageSquare, Plus, Settings, Check, X, File as FileIcon, ChevronLeft } from 'lucide-react';
+import { Paperclip, Send, Folder, MessageSquare, Plus, Settings as SettingsIcon, Check, X, File as FileIcon, ChevronLeft } from 'lucide-react';
 import Mermaid from './components/Mermaid';
 import CollapsibleCode from './components/CollapsibleCode';
+import SettingsModal, { Settings, defaultSettings } from './components/SettingsModal';
+import DiffViewer from './components/DiffViewer';
 
 const API_BASE = typeof window !== 'undefined' ? `http://${window.location.hostname}:4000` : 'http://localhost:4000';
 const WS_BASE = typeof window !== 'undefined' ? `ws://${window.location.hostname}:4000` : 'ws://localhost:4000';
@@ -28,6 +30,7 @@ export default function Home() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [cliLogs, setCliLogs] = useState<string[]>([]);
   
   const [input, setInput] = useState('');
   const [streamingMessage, setStreamingMessage] = useState<string>('');
@@ -41,8 +44,28 @@ export default function Home() {
   // Mention system state
   const [mentionState, setMentionState] = useState<{ active: boolean; query: string; startIndex: number; index: number }>({ active: false, query: '', startIndex: -1, index: 0 });
   const [filteredFiles, setFilteredFiles] = useState<string[]>([]);  
-  const [approveMode, setApproveMode] = useState<'default' | 'yolo'>('default');
   const [model, setModel] = useState('gemini-3.1-pro-preview');
+
+  const [settings, setSettings] = useState<Settings>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('gemini_cli_settings');
+      if (saved) {
+        try {
+          return JSON.parse(saved);
+        } catch (e) {
+          console.error('Failed to parse settings', e);
+        }
+      }
+    }
+    return defaultSettings;
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [confirmData, setConfirmData] = useState<{ 
+    message: string; 
+    onConfirm: () => void; 
+    onCancel: () => void;
+    diff?: { oldContent: string; newContent: string; filename: string };
+  } | null>(null);
 
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState('');
@@ -51,6 +74,10 @@ export default function Home() {
   const [parentPath, setParentPath] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem('gemini_cli_settings', JSON.stringify(settings));
+  }, [settings]);
 
   useEffect(() => {
     fetch(`${API_BASE}/projects`)
@@ -104,8 +131,10 @@ export default function Home() {
   }, [selectedChat]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, streamingMessage]);
+    if (settings.chat.autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, streamingMessage, settings.chat.autoScroll]);
 
   useEffect(() => {
     if (isAddingProject) {
@@ -194,6 +223,7 @@ export default function Home() {
 
     const currentModel = overrideModel || model;
     setStreamingMessage('');
+    setCliLogs([]);
     setIsGenerating(true);
 
     const socket = new WebSocket(WS_BASE);
@@ -207,7 +237,8 @@ export default function Home() {
         prompt: currentPrompt,
         model: currentModel,
         geminiSessionId: selectedChat.geminiSessionId,
-        approve: approveMode
+        approve: settings.agentPolicy === 'yolo' ? 'yolo' : 'default',
+        autoTitle: settings.chat.autoTitle
       }));
     };
 
@@ -225,6 +256,23 @@ export default function Home() {
         setStreamingMessage(assistantContent);
       } else if (data.type === 'init' && data.session_id) {
         setSelectedChat(prev => prev ? { ...prev, geminiSessionId: data.session_id } : prev);
+      } else if (data.type === 'confirm') {
+        setConfirmData({
+            message: data.message,
+            diff: data.diff,
+            onConfirm: () => {
+                socket.send(JSON.stringify({ type: 'input', content: 'y' }));
+                setConfirmData(null);
+            },
+            onCancel: () => {
+                socket.send(JSON.stringify({ type: 'input', content: 'n' }));
+                setConfirmData(null);
+            }
+        });
+      } else if (data.type === 'stderr' || data.type === 'stdout') {
+        if (data.content) {
+            setCliLogs(prev => [...prev, data.content].slice(-100));
+        }
       } else if (data.type === 'done') {
         if (!hasFallbackTriggered) {
           setMessages(prev => [...prev, { role: 'assistant', content: assistantContent }]);
@@ -358,12 +406,12 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-100 font-sans">
+    <div className={`flex h-screen font-sans theme-${settings.appearance.theme} ${settings.appearance.theme === 'light' ? 'bg-gray-50 text-gray-900' : 'bg-gray-900 text-gray-100'}`}>
       {/* Sidebar */}
-      <div className="w-64 bg-gray-800 border-r border-gray-700 flex flex-col">
-        <div className="p-4 border-b border-gray-700">
-          <h1 className="text-xl font-bold flex items-center gap-2">
-            <Settings className="w-5 h-5" /> Gemini CLI UI
+      <div className={`w-64 border-r flex flex-col ${settings.appearance.theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
+        <div className={`p-4 border-b ${settings.appearance.theme === 'light' ? 'border-gray-200' : 'border-gray-700'}`}>
+          <h1 className="text-xl font-bold flex items-center gap-2 cursor-pointer" onClick={() => setShowSettings(true)}>
+            <SettingsIcon className="w-5 h-5" /> Gemini CLI UI
           </h1>
         </div>
         
@@ -391,8 +439,8 @@ export default function Home() {
           {/* New Project Modal */}
           {isAddingProject && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-              <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh]">
-                <div className="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/50">
+              <div className={`border rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh] ${settings.appearance.theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
+                <div className={`p-4 border-b flex justify-between items-center ${settings.appearance.theme === 'light' ? 'bg-gray-50 border-gray-200' : 'bg-gray-800/50 border-gray-700'}`}>
                   <h3 className="text-lg font-semibold">Add Project</h3>
                   <button onClick={() => setIsAddingProject(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
                 </div>
@@ -407,12 +455,12 @@ export default function Home() {
                         onChange={(e) => setNewProjectName(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()}
                         placeholder="Project Name"
-                        className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors"
+                        className={`flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors ${settings.appearance.theme === 'light' ? 'bg-gray-100 border-gray-300' : 'bg-gray-900 border-gray-700 text-white'}`}
                       />
                       <button 
                         onClick={() => handleCreateProject()}
                         disabled={!newProjectName.trim()}
-                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                        className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium transition-colors text-white"
                       >
                         Create
                       </button>
@@ -421,8 +469,8 @@ export default function Home() {
 
                   <div className="flex-1 flex flex-col overflow-hidden">
                     <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Or Select Existing Folder</label>
-                    <div className="bg-gray-900 rounded-lg border border-gray-700 flex flex-col overflow-hidden">
-                      <div className="p-2 border-b border-gray-700 bg-gray-800/30 flex items-center gap-2 text-xs text-gray-400">
+                    <div className={`rounded-lg border flex flex-col overflow-hidden ${settings.appearance.theme === 'light' ? 'bg-gray-50 border-gray-200' : 'bg-gray-900 border-gray-700'}`}>
+                      <div className={`p-2 border-b flex items-center gap-2 text-xs text-gray-400 ${settings.appearance.theme === 'light' ? 'bg-gray-100 border-gray-200' : 'bg-gray-800/30 border-gray-700'}`}>
                         <button 
                           onClick={() => parentPath && setBrowsePath(parentPath)}
                           disabled={!parentPath}
@@ -436,14 +484,14 @@ export default function Home() {
                         {browseEntries.map(entry => (
                           <div 
                             key={entry.path}
-                            className="flex items-center justify-between p-2 hover:bg-gray-800 rounded group transition-colors cursor-default"
+                            className={`flex items-center justify-between p-2 rounded group transition-colors cursor-default ${settings.appearance.theme === 'light' ? 'hover:bg-gray-200' : 'hover:bg-gray-800'}`}
                           >
                             <div 
                               className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer"
                               onClick={() => entry.isDirectory ? setBrowsePath(entry.path) : null}
                             >
                               <Folder className={`w-4 h-4 shrink-0 ${entry.isDirectory ? 'text-blue-400' : 'text-gray-500'}`} />
-                              <span className={`text-sm truncate ${entry.isDirectory ? 'text-gray-200' : 'text-gray-500'}`}>{entry.name}</span>
+                              <span className={`text-sm truncate ${entry.isDirectory ? (settings.appearance.theme === 'light' ? 'text-gray-900' : 'text-gray-200') : 'text-gray-500'}`}>{entry.name}</span>
                             </div>
                             {entry.isDirectory && (
                               <button 
@@ -460,7 +508,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-gray-900/50 flex justify-end">
+                <div className={`p-4 flex justify-end ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-gray-900/50'}`}>
                   <button 
                     onClick={() => setIsAddingProject(false)}
                     className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
@@ -474,7 +522,7 @@ export default function Home() {
 
           {/* Chats */}
           {selectedProject && (
-            <div className="p-4 border-t border-gray-700">
+            <div className={`p-4 border-t ${settings.appearance.theme === 'light' ? 'border-gray-200' : 'border-gray-700'}`}>
               <div className="flex justify-between items-center mb-2">
                 <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Chats</h2>
                 <button onClick={handleCreateChat} className="text-gray-400 hover:text-white"><Plus className="w-4 h-4" /></button>
@@ -500,21 +548,14 @@ export default function Home() {
       {/* Main Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-14 border-b border-gray-700 flex items-center justify-between px-6 bg-gray-800">
+        <header className={`h-14 border-b flex items-center justify-between px-6 ${settings.appearance.theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
           <div className="font-semibold text-lg truncate">
             {selectedProject ? `${selectedProject} / ${selectedChat?.title || 'No chat selected'}` : 'Select a project'}
           </div>
           <div className="flex items-center gap-4 text-sm">
             <label className="flex items-center gap-2 cursor-pointer">
-              <span className="text-gray-400">Approval:</span>
-              <select value={approveMode} onChange={e => setApproveMode(e.target.value as any)} className="bg-gray-700 border-none rounded px-2 py-1 text-white">
-                <option value="default">Default (Prompt)</option>
-                <option value="yolo">Auto Approve (YOLO)</option>
-              </select>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
               <span className="text-gray-400">Model:</span>
-              <select value={model} onChange={e => setModel(e.target.value)} className="bg-gray-700 border-none rounded px-2 py-1 text-white">
+              <select value={model} onChange={e => setModel(e.target.value)} className={`border-none rounded px-2 py-1 ${settings.appearance.theme === 'light' ? 'bg-gray-100 text-gray-900' : 'bg-gray-700 text-white'}`}>
                 <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
                 <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
                 <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>
@@ -527,17 +568,17 @@ export default function Home() {
         </header>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-gray-900">
+        <div className={`flex-1 overflow-y-auto p-6 space-y-6 ${settings.appearance.theme === 'light' ? 'bg-gray-50' : 'bg-gray-900'}`}>
           {messages.map((m, i) => (
-            <MessageBubble key={i} message={m} />
+            <MessageBubble key={i} message={m} theme={settings.appearance.theme} renderMermaid={settings.chat.renderMermaid} />
           ))}
           {isGenerating && !streamingMessage && (
-            <div className="flex gap-4 max-w-4xl mx-auto">
-              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-purple-600">
+            <div className={`flex gap-4 max-w-4xl mx-auto ${settings.appearance.theme === 'light' ? 'text-gray-900' : 'text-gray-100'}`}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-purple-600 text-white">
                 G
               </div>
               <div className="flex-1 space-y-2 overflow-hidden">
-                <div className="inline-block text-left rounded-2xl px-5 py-3 bg-gray-800 text-gray-400 max-w-full overflow-x-auto">
+                <div className={`inline-block text-left rounded-2xl px-5 py-3 max-w-full overflow-x-auto ${settings.appearance.theme === 'light' ? 'bg-white border border-gray-200 text-gray-400' : 'bg-gray-800 text-gray-400'}`}>
                   <div className="flex space-x-1.5 items-center h-6">
                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                     <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
@@ -548,13 +589,23 @@ export default function Home() {
             </div>
           )}
           {streamingMessage && (
-            <MessageBubble message={{ role: 'assistant', content: streamingMessage }} isStreaming />
+            <MessageBubble message={{ role: 'assistant', content: streamingMessage }} isStreaming theme={settings.appearance.theme} renderMermaid={settings.chat.renderMermaid} />
           )}
+          
+          {settings.chat.showLogs && cliLogs.length > 0 && (
+            <div className={`mt-4 p-4 rounded-lg font-mono text-xs overflow-x-auto ${settings.appearance.theme === 'light' ? 'bg-gray-100 border border-gray-200' : 'bg-black/40 border border-gray-800'}`}>
+                <div className="text-gray-500 mb-2 font-bold uppercase tracking-wider text-[10px]">Raw CLI Logs</div>
+                {cliLogs.map((log, i) => (
+                    <div key={i} className="whitespace-pre-wrap text-gray-400 border-l-2 border-gray-700 pl-2 mb-1">{log}</div>
+                ))}
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 
         {/* Input Area */}
-        <div className="p-4 bg-gray-800 border-t border-gray-700">
+        <div className={`p-4 border-t ${settings.appearance.theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
           <div className="max-w-4xl mx-auto flex flex-col gap-2">
             {attachments.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-2">
@@ -568,7 +619,7 @@ export default function Home() {
               </div>
             )}
             
-            <div className="relative flex items-end gap-2 bg-gray-900 p-2 rounded-xl border border-gray-700 focus-within:border-blue-500 transition-colors shadow-sm">
+            <div className={`relative flex items-end gap-2 p-2 rounded-xl border focus-within:border-blue-500 transition-colors shadow-sm ${settings.appearance.theme === 'light' ? 'bg-gray-50 border-gray-300' : 'bg-gray-900 border-gray-700'}`}>
               <div className="relative">
                 <button 
                   onClick={() => setShowFilePicker(!showFilePicker)}
@@ -603,7 +654,7 @@ export default function Home() {
                 onKeyDown={handleKeyDown}
                 placeholder={selectedChat ? "Type your prompt here... (@ to mention file, Shift+Enter for newline)" : "Select or create a chat to begin..."}
                 disabled={!selectedChat || isGenerating}
-                className="flex-1 max-h-64 min-h-[44px] bg-transparent border-none focus:outline-none resize-none py-3 text-sm scrollbar-thin text-gray-100 placeholder-gray-500 relative"
+                className="flex-1 max-h-64 min-h-[44px] bg-transparent border-none focus:outline-none resize-none py-3 text-sm scrollbar-thin placeholder-gray-500 relative"
                 rows={Math.min(10, input.split('\n').length)}
               />
 
@@ -652,21 +703,68 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {showSettings && (
+        <SettingsModal
+            settings={settings}
+            setSettings={setSettings}
+            onClose={() => setShowSettings(false)}
+            onClearChats={() => {
+                if (confirm('Are you sure you want to clear all chats for this project?')) {
+                    fetch(`${API_BASE}/projects/${selectedProject}/chats`, { method: 'DELETE' })
+                      .then(() => {
+                        setChats([]);
+                        setSelectedChat(null);
+                        setMessages([]);
+                      });
+                }
+            }}
+        />
+      )}
+
+      {confirmData && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+            <div className={`border rounded-xl shadow-2xl w-full p-6 ${confirmData.diff ? 'max-w-6xl' : 'max-w-md'} ${settings.appearance.theme === 'light' ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700'}`}>
+                <h3 className="text-lg font-bold mb-4">Command Approval</h3>
+                <div className={`p-3 rounded-lg font-mono text-sm mb-4 ${settings.appearance.theme === 'light' ? 'bg-gray-100' : 'bg-gray-900'}`}>
+                    {confirmData.message}
+                </div>
+
+                {confirmData.diff && (
+                    <DiffViewer
+                        oldValue={confirmData.diff.oldContent}
+                        newValue={confirmData.diff.newContent}
+                        filename={confirmData.diff.filename}
+                        splitView={true}
+                    />
+                )}
+
+                <div className="flex justify-end gap-3 mt-6">
+                    <button onClick={confirmData.onCancel} className="px-4 py-2 text-gray-400 hover:text-white transition-colors">
+                        {confirmData.diff ? 'Reject changes' : 'Cancel'}
+                    </button>
+                    <button onClick={confirmData.onConfirm} className="bg-blue-600 hover:bg-blue-500 px-6 py-2 rounded-lg font-bold text-white transition-all shadow-lg shadow-blue-900/20">
+                        {confirmData.diff ? 'Accept changes' : 'Approve'}
+                    </button>
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function MessageBubble({ message, isStreaming = false }: { message: Message, isStreaming?: boolean }) {
+function MessageBubble({ message, isStreaming = false, theme = 'dark', renderMermaid = true }: { message: Message, isStreaming?: boolean, theme?: string, renderMermaid?: boolean }) {
   const isUser = message.role === 'user';
   
   return (
     <div className={`flex gap-4 max-w-4xl mx-auto ${isUser ? 'flex-row-reverse' : ''}`}>
-      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${isUser ? 'bg-blue-600' : 'bg-purple-600'}`}>
+      <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-blue-600' : 'bg-purple-600'}`}>
         {isUser ? 'U' : 'G'}
       </div>
       <div className={`flex-1 space-y-2 overflow-hidden ${isUser ? 'text-right' : ''}`}>
-        <div className={`inline-block text-left rounded-2xl px-5 py-3 ${isUser ? 'bg-blue-600/20 text-blue-50' : 'bg-gray-800 text-gray-100'} max-w-full overflow-x-auto`}>
-          <div className={`prose prose-invert max-w-none ${isUser ? 'prose-p:my-0' : ''}`}>
+        <div className={`inline-block text-left rounded-2xl px-5 py-3 max-w-full overflow-x-auto ${isUser ? 'bg-blue-600/20 text-blue-50' : (theme === 'light' ? 'bg-white border border-gray-200 text-gray-900' : 'bg-gray-800 text-gray-100')}`}>
+          <div className={`prose prose-invert max-w-none ${isUser ? 'prose-p:my-0' : ''} ${theme === 'light' ? 'prose-gray prose-p:text-gray-900 prose-headings:text-gray-900' : ''}`}>
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               components={{
@@ -675,7 +773,7 @@ function MessageBubble({ message, isStreaming = false }: { message: Message, isS
                 const language = match ? match[1] : '';
                 const codeString = String(children).replace(/\n$/, '');
 
-                if (!inline && language === 'mermaid') {
+                if (!inline && language === 'mermaid' && renderMermaid) {
                   return <Mermaid chart={codeString} />;
                 }
 

@@ -83,6 +83,18 @@ app.get('/projects/:project/chats', (req, res) => {
   res.json(chats);
 });
 
+app.delete('/projects/:project/chats', (req, res) => {
+  const { project } = req.params;
+  const chatsDir = path.join(PROJECTS_DIR, project, 'chats');
+  if (fs.existsSync(chatsDir)) {
+    const files = fs.readdirSync(chatsDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      fs.unlinkSync(path.join(chatsDir, file));
+    }
+  }
+  res.json({ success: true });
+});
+
 app.post('/projects/:project/chats', (req, res) => {
   const { project } = req.params;
   const chatsDir = path.join(PROJECTS_DIR, project, 'chats');
@@ -171,7 +183,7 @@ wss.on('connection', (ws) => {
     try {
       const data = JSON.parse(message.toString());
       if (data.type === 'prompt') {
-        const { project, chatId, prompt, model, geminiSessionId, approve } = data;
+        const { project, chatId, prompt, model, geminiSessionId, approve, autoTitle } = data;
         
         const projectDir = path.join(PROJECTS_DIR, project);
         const chatsDir = path.join(projectDir, 'chats');
@@ -184,7 +196,7 @@ wss.on('connection', (ws) => {
         
         chat.messages.push({ role: 'user', content: prompt });
         chat.updatedAt = new Date().toISOString();
-        if (chat.title === 'New Chat') {
+        if (chat.title === 'New Chat' && autoTitle !== false) {
           chat.title = prompt.substring(0, 30);
         }
         fs.writeFileSync(chatFile, JSON.stringify(chat, null, 2));
@@ -206,21 +218,59 @@ wss.on('connection', (ws) => {
         
         let assistantMessageContent = '';
         let currentSessionId = geminiSessionId;
+        let pendingToolCall: any = null;
 
         let buffer = '';
-        child.stdout.on('data', (chunk) => {
-          buffer += chunk.toString();
+        child.stdout.on('data', async (chunk) => {
+          const chunkStr = chunk.toString();
+          
+          // Detect confirmation prompts (e.g., "[y/N]")
+          if (chunkStr.includes('[y/N]') || chunkStr.includes('[Y/n]')) {
+            let diffData = null;
+            if (pendingToolCall && (pendingToolCall.name === 'replace' || pendingToolCall.name === 'write_file')) {
+                const args = pendingToolCall.args;
+                const filePath = path.join(PROJECTS_DIR, project, args.file_path);
+                try {
+                    const oldContent = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : '';
+                    let newContent = '';
+                    if (pendingToolCall.name === 'replace') {
+                        newContent = oldContent.replace(args.old_string, args.new_string);
+                    } else {
+                        newContent = args.content;
+                    }
+                    diffData = {
+                        oldContent,
+                        newContent,
+                        filename: args.file_path
+                    };
+                } catch (e) {
+                    console.error("Failed to prepare diff data", e);
+                }
+            }
+            ws.send(JSON.stringify({ 
+                type: 'confirm', 
+                message: chunkStr.trim(),
+                diff: diffData
+            }));
+          }
+
+          buffer += chunkStr;
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
           for (const line of lines) {
             if (!line.trim() || !line.startsWith('{')) {
-                // Ignore non-json lines or maybe send as stderr
                 continue;
             }
             try {
               const parsed = JSON.parse(line);
               ws.send(JSON.stringify(parsed));
               
+              if (parsed.type === 'call') {
+                  pendingToolCall = parsed;
+              } else if (parsed.type === 'result') {
+                  pendingToolCall = null;
+              }
+
               if (parsed.type === 'init' && parsed.session_id) {
                 currentSessionId = parsed.session_id;
                 chat.geminiSessionId = currentSessionId;
@@ -238,7 +288,11 @@ wss.on('connection', (ws) => {
         });
 
         child.stderr.on('data', (chunk) => {
-          ws.send(JSON.stringify({ type: 'stderr', content: chunk.toString() }));
+          const chunkStr = chunk.toString();
+          if (chunkStr.includes('[y/N]') || chunkStr.includes('[Y/n]')) {
+            ws.send(JSON.stringify({ type: 'confirm', message: chunkStr.trim() }));
+          }
+          ws.send(JSON.stringify({ type: 'stderr', content: chunkStr }));
         });
 
         // Handle user interactive input for approvals (if we wanted to pipe it, but we can't easily with WS unless we have a pty or something, but we just implement YOLO vs Default and let it fail or approve)

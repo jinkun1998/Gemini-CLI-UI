@@ -6,9 +6,48 @@
   --foreground: #f3f4f6;
 }
 
+/* Theme: Gemini (Default) */
+.theme-gemini {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  --accent: #3b82f6;
+  --secondary: #8b5cf6;
+}
+
+/* Theme: ChatGPT */
+.theme-chatgpt {
+  --background: #212121;
+  --foreground: #ececec;
+  --accent: #10a37f;
+  --secondary: #acacbe;
+}
+
+/* Theme: Shadcn */
+.theme-shadcn {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --accent: #27272a;
+  --secondary: #3f3f46;
+}
+
+/* Theme: Dark */
+.theme-dark {
+  --background: #111827;
+  --foreground: #f3f4f6;
+  --accent: #2563eb;
+}
+
+/* Theme: Light */
+.theme-light {
+  --background: #f9fafb;
+  --foreground: #111827;
+  --accent: #2563eb;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .scrollbar-thin::-webkit-scrollbar {
