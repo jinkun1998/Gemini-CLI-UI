@@ -13,6 +13,13 @@ export default function Mermaid({ chart }: { chart: string }) {
   const id = useRef(`mermaid-${uuidv4()}`);
 
   useEffect(() => {
+    const isDark = document.documentElement.classList.contains('dark');
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: isDark ? 'dark' : 'neutral',
+      securityLevel: 'loose',
+    });
+
     if (ref.current) {
       try {
         mermaid.render(id.current, chart).then((result) => {
@@ -26,5 +33,5 @@ export default function Mermaid({ chart }: { chart: string }) {
     }
   }, [chart]);
 
-  return <div ref={ref} className="mermaid flex justify-center my-4 overflow-x-auto bg-gray-800 p-4 rounded-lg" />;
+  return <div ref={ref} className="mermaid flex justify-center my-4 overflow-x-auto bg-[var(--surface)] p-4 rounded-[var(--radius)] border border-[var(--border)]" />;
 }

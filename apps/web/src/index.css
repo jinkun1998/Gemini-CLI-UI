@@ -1,62 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+html {
+  view-transition-name: root;
+}
+
 :root {
-  --background: #111827;
-  --foreground: #f3f4f6;
+  /* Default (Light) - High Contrast Pure Black Text */
+  --background: #ffffff;
+  --foreground: #000000; 
+  --border: #d1d5db;
+  --surface: #f4f4f5;
+  --accent: #2563eb;
+  --secondary: #7c3aed;
+  --primary: #000000;
+  --primary-hover: #27272a;
+  --primary-foreground: #ffffff;
+  --radius: 0.75rem;
+  
+  --bubble-user-bg: #f4f4f5;
+  --bubble-user-fg: #000000;
+  --bubble-assistant-bg: #ffffff;
+  --bubble-assistant-fg: #000000;
+  --bubble-assistant-border: #d1d5db;
+
+  --code-inline-bg: #f1f1f1;
+  --code-inline-fg: #d946ef;
 }
 
-/* Theme: Gemini (Default) */
-.theme-gemini {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --accent: #3b82f6;
-  --secondary: #8b5cf6;
-}
-
-/* Theme: ChatGPT */
-.theme-chatgpt {
-  --background: #212121;
-  --foreground: #ececec;
-  --accent: #10a37f;
-  --secondary: #acacbe;
-}
-
-/* Theme: Shadcn */
-.theme-shadcn {
+.dark {
   --background: #09090b;
-  --foreground: #fafafa;
-  --accent: #27272a;
-  --secondary: #3f3f46;
+  --foreground: #ffffff; 
+  --border: #27272a;
+  --surface: #0f0f12;
+  --bubble-user-bg: #111113;
+  --bubble-user-fg: #ffffff;
+  --bubble-assistant-bg: transparent;
+  --bubble-assistant-fg: #ffffff;
+  --bubble-assistant-border: transparent;
+
+  --code-inline-bg: #27272a;
+  --code-inline-fg: #f472b6;
 }
 
-/* Theme: Dark */
-.theme-dark {
-  --background: #111827;
-  --foreground: #f3f4f6;
-  --accent: #2563eb;
+/* Mode overrides */
+.theme-gemini {
+  --bubble-user-bg: #e0e7ff;
+}
+.dark .theme-gemini {
+  --background: #0f172a;
+  --surface: #1e293b;
+  --border: #1e293b;
+  --bubble-user-bg: rgba(59, 130, 246, 0.2);
 }
 
-/* Theme: Light */
-.theme-light {
-  --background: #f9fafb;
-  --foreground: #111827;
-  --accent: #2563eb;
+.theme-chatgpt {
+  --surface: #f7f7f8;
+}
+.dark .theme-chatgpt {
+  --background: #0d0d0d;
+  --surface: #171717;
+  --border: #2f2f2f;
+}
+
+/* Mode: Shadcn - Specific assistant-ui.com style */
+.theme-shadcn {
+  --background: #ffffff;
+  --foreground: #000000;
+  --border: #e4e4e7;
+  --surface: #f4f4f5;
+  --card: #ffffff;
+  --radius: 0.75rem;
+  --radius-lg: 1rem;
+}
+
+.dark .theme-shadcn {
+  --background: #09090B;
+  --foreground: #FAFAFA;
+  --border: #27272A;
+  --surface: #0F0F12;
+  --card: #111113;
+  --bubble-user-bg: #111113;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-family: 'Inter', sans-serif;
   transition: background-color 0.2s, color 0.2s;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Force pure black/white for text in prose */
+.prose {
+  --tw-prose-body: var(--foreground);
+  --tw-prose-headings: var(--foreground);
+  --tw-prose-bold: var(--foreground);
+  --tw-prose-links: var(--foreground);
 }
 
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background-color: #374151;
+  background-color: var(--border);
   border-radius: 20px;
+}
+
+/* View Transitions API - Simplified for Ripple */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 999999;
 }

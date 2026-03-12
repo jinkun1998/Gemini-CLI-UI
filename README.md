@@ -7,6 +7,7 @@ A desktop and mobile UI for [Gemini CLI](https://github.com/google-gemini/gemini
 ## Features
 
 - **Responsive Design** - Works seamlessly across desktop, tablet, and mobile so you can also use Gemini CLI from mobile
+- **Multiple UI Modes** - Switch between distinct visual themes including default Gemini, ChatGPT, and Shadcn Assistant (assistant-ui style)
 - **Interactive Chat Interface** - Built-in chat interface for seamless communication with Gemini CLI
 - **File Explorer** - Interactive file tree with live file references
 - **Session Management** - Resume conversations, manage multiple sessions, and track history
