@@ -113,20 +113,26 @@ export default function Home() {
   const playNotificationSound = useCallback(() => {
     if (!settings.chat.playSound) return;
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.1);
+
+      // Beam sound effect
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(1200, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
       gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.start();
-      osc.stop(ctx.currentTime + 0.1);
+      osc.stop(ctx.currentTime + 0.3);
+      
+      if (ctx.state === 'suspended') ctx.resume();
     } catch (e) {
-      console.error('Failed to play sound', e);
+      console.error('Failed to play notification sound:', e);
     }
   }, [settings.chat.playSound]);
 
@@ -323,6 +329,10 @@ export default function Home() {
     }
   }, [ws]);
 
+    const handleConfirmRequest = useCallback((action: string) => {
+    handleSend(`I approve the action: ${action}`);
+  }, [handleSend]);
+
   const handleRetry = useCallback((index: number) => {
     if (isGenerating) return;
     const userMessage = messages[index];
@@ -383,7 +393,7 @@ export default function Home() {
     <div className="flex-1 overflow-hidden flex flex-col relative">
       <div ref={scrollRef} onScroll={handleScroll} className={`flex-1 overflow-y-auto p-6 space-y-6 ${isShadcn ? 'w-full px-4' : ''}`}>
         {isShadcn && messages.length === 0 && selectedChat && !isGenerating && ( <ShadcnSuggestions onSelect={(text: string) => handleSend(text)} /> )}
-        {messages.map((m, i) => ( <MessageBubble key={i} index={i} message={m} renderMermaid={settings.chat.renderMermaid} onRetry={m.role === 'user' ? handleRetry : undefined} /> ))}
+        {messages.map((m, i) => ( <MessageBubble key={i} index={i} message={m} renderMermaid={settings.chat.renderMermaid} onRetry={m.role === 'user' ? handleRetry : undefined} onConfirmRequest={handleConfirmRequest} /> ))}
         {isGenerating && !streamingMessage && (
           <div className="flex w-full mb-6 px-4 justify-start">
             <div className="flex gap-4 w-full max-w-[85%] flex-row">

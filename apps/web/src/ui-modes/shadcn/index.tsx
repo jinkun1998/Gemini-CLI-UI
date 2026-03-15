@@ -145,7 +145,8 @@ const ShadcnLayout: React.FC<ChatLayoutProps> = React.memo(({ sidebar, header, m
   </div>
 ));
 
-const ShadcnMessage: React.FC<MessageBubbleProps> = React.memo(({ message, index, isStreaming, renderMermaid, onRetry }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, index, isStreaming, renderMermaid, onRetry, onConfirmRequest }) => {
+
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
 
@@ -167,7 +168,32 @@ const ShadcnMessage: React.FC<MessageBubbleProps> = React.memo(({ message, index
             <div className={`prose max-w-none prose-p:leading-relaxed text-base ${isUser ? 'prose-p:my-0' : ''} dark:prose-invert`}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                
                 components={{
+                  p({ children }) {
+                    const content = React.Children.toArray(children);
+                    const firstChild = content[0];
+                    if (typeof firstChild === 'string' && firstChild.includes('[[CONFIRM:')) {
+                      const match = firstChild.match(/\[\[CONFIRM: (.*?)\]\]/);
+                      if (match) {
+                        const action = match[1];
+                        return (
+                          <div className="my-4 p-4 border border-[var(--foreground)]/30 bg-[var(--foreground)]/5 rounded-xl flex flex-col items-center gap-3 text-center">
+                            <p className="text-sm font-medium text-[var(--foreground)]/80 m-0">Action Required: {action}</p>
+                            <button 
+                              onClick={() => onConfirmRequest?.(action)}
+                              className="px-6 py-2 bg-[var(--foreground)] text-[var(--background)] rounded-lg text-sm font-bold shadow-lg transition-all active:scale-95 hover:opacity-90"
+                            >
+                              Approve Action
+                            </button>
+                          </div>
+                        );
+                      }
+                    }
+                    return <p>{children}</p>;
+                  },
+
+            
                   code({ node, inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     const language = match ? match[1] : '';
@@ -311,6 +337,6 @@ const ShadcnInput: React.FC<ChatInputProps> = React.memo(({
 
 export const ShadcnMode: UIModeComponents = {
   ChatLayout: ShadcnLayout,
-  MessageBubble: ShadcnMessage,
+  MessageBubble: MessageBubble,
   ChatInput: ShadcnInput
 };

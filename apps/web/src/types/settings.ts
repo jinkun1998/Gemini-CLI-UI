@@ -4,6 +4,7 @@ export type Theme = 'light' | 'dark' | 'system';
 
 export type Settings = {
   agentPolicy: AgentPolicy;
+  projectPolicies: Record<string, AgentPolicy>;
   toolPermissions: {
     read_file: boolean;
     write_file: boolean;
@@ -30,6 +31,7 @@ export type Settings = {
 
 export const defaultSettings: Settings = {
   agentPolicy: 'ask',
+  projectPolicies: {},
   toolPermissions: {
     read_file: true,
     write_file: false,

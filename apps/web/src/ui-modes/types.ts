@@ -21,6 +21,7 @@ export interface MessageBubbleProps {
   isStreaming?: boolean;
   renderMermaid: boolean;
   onRetry?: (index: number) => void;
+  onConfirmRequest?: (action: string) => void;
 }
 
 export interface ChatInputProps {

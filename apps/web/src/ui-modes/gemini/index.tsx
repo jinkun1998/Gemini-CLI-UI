@@ -21,7 +21,7 @@ const ChatLayout: React.FC<ChatLayoutProps> = React.memo(({ sidebar, header, mes
   </div>
 ));
 
-const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, index, isStreaming, renderMermaid, onRetry }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, index, isStreaming, renderMermaid, onRetry, onConfirmRequest }) => {
   const isUser = message.role === 'user';
   const [copied, setCopied] = React.useState(false);
 
@@ -48,7 +48,32 @@ const MessageBubble: React.FC<MessageBubbleProps> = React.memo(({ message, index
             <div className={`prose max-w-none dark:prose-invert ${isUser ? 'prose-p:my-0' : ''} prose-p:leading-relaxed`}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                
                 components={{
+                  p({ children }) {
+                    const content = React.Children.toArray(children);
+                    const firstChild = content[0];
+                    if (typeof firstChild === 'string' && firstChild.includes('[[CONFIRM:')) {
+                      const match = firstChild.match(/\[\[CONFIRM: (.*?)\]\]/);
+                      if (match) {
+                        const action = match[1];
+                        return (
+                          <div className="my-4 p-4 border border-blue-500/30 bg-blue-500/10 rounded-xl flex flex-col items-center gap-3 text-center">
+                            <p className="text-sm font-medium text-blue-400 m-0">Action Required: {action}</p>
+                            <button 
+                              onClick={() => onConfirmRequest?.(action)}
+                              className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold shadow-lg transition-all active:scale-95"
+                            >
+                              Approve Action
+                            </button>
+                          </div>
+                        );
+                      }
+                    }
+                    return <p>{children}</p>;
+                  },
+
+            
                   code({ node, inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     const language = match ? match[1] : '';
