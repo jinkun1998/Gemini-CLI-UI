@@ -12,7 +12,7 @@ const API_BASE = typeof window !== 'undefined' ? `http://${window.location.hostn
 const WS_BASE = typeof window !== 'undefined' ? `ws://${window.location.hostname}:4000` : 'ws://localhost:4000';
 
 type Message = { role: 'user' | 'assistant'; content: string; };
-type Chat = { id: string; title: string; messages: Message[]; geminiSessionId: string | null; model: string; updatedAt: string; };
+type Chat = { id: string; title: string; messages: Message[]; geminiSessionId: string | null; model: string; updatedAt: string; agentPolicy?: AgentPolicy; };
 
 export default function Home() {
   const [projects, setProjects] = useState<string[]>([]);
@@ -238,6 +238,7 @@ export default function Home() {
     setLastRawLog(null);
 
     const currentModel = overrideModel || model;
+    const currentPolicy = selectedChat?.agentPolicy || (selectedProject ? settings.projectPolicies[selectedProject] : null) || settings.agentPolicy;
     const socket = new WebSocket(WS_BASE);
     setWs(socket);
 
@@ -245,10 +246,9 @@ export default function Home() {
       socket.send(JSON.stringify({
         type: 'prompt', project: selectedProject, chatId: selectedChat.id, prompt: promptText, model: currentModel,
         geminiSessionId: selectedChat.geminiSessionId,
-        approve: settings.agentPolicy,
+        approve: currentPolicy,
         toolPermissions: settings.toolPermissions,
         autoTitle: settings.chat.autoTitle,
-
         isRetry: !!overrideModel || isRegenerating
       }));
     };

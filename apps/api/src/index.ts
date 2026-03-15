@@ -98,9 +98,19 @@ app.post('/projects/:project/chats', (req, res) => {
   const { project } = req.params;
   const chatsDir = path.join(PROJECTS_DIR, project, 'chats');
   if (!fs.existsSync(chatsDir)) fs.mkdirSync(chatsDir, { recursive: true });
-  const chat = { id: uuidv4(), title: 'New Chat', messages: [], geminiSessionId: null, model: req.body.model || 'gemini-3.1-pro', updatedAt: new Date().toISOString() };
+  const chat = { id: uuidv4(), title: 'New Chat', messages: [], geminiSessionId: null, model: req.body.model || 'gemini-3.1-pro-preview', updatedAt: new Date().toISOString() };
   fs.writeFileSync(path.join(chatsDir, `${chat.id}.json`), JSON.stringify(chat, null, 2));
   res.json(chat);
+});
+
+app.patch('/projects/:project/chats/:id', (req, res) => {
+  const { project, id } = req.params;
+  const chatFile = path.join(PROJECTS_DIR, project, 'chats', `${id}.json`);
+  if (!fs.existsSync(chatFile)) return res.status(404).json({ error: 'Chat not found' });
+  const chat = JSON.parse(fs.readFileSync(chatFile, 'utf-8'));
+  const updatedChat = { ...chat, ...req.body, updatedAt: new Date().toISOString() };
+  fs.writeFileSync(chatFile, JSON.stringify(updatedChat, null, 2));
+  res.json(updatedChat);
 });
 
 app.get('/projects/:project/files', (req, res) => {
