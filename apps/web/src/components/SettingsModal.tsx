@@ -6,13 +6,14 @@ export type { UIMode, AgentPolicy, Settings, Theme };
 export { defaultSettings };
 
 interface SettingsModalProps {
+  projects: string[];
   settings: Settings;
   setSettings: (s: Settings) => void;
   onClose: () => void;
   onClearChats: () => void;
 }
 
-export default function SettingsModal({ settings, setSettings, onClose, onClearChats }: SettingsModalProps) {
+export default function SettingsModal({ projects, settings, setSettings, onClose, onClearChats }: SettingsModalProps) {
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
 
   const updateSettings = (partial: Partial<Settings>) => {
@@ -30,6 +31,16 @@ export default function SettingsModal({ settings, setSettings, onClose, onClearC
     }
   };
 
+  const updateProjectPolicy = (project: string, policy: AgentPolicy | 'global') => {
+    const newPolicies = { ...localSettings.projectPolicies };
+    if (policy === 'global') {
+      delete newPolicies[project];
+    } else {
+      newPolicies[project] = policy;
+    }
+    updateSettings({ projectPolicies: newPolicies });
+  };
+
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-[var(--surface)] border border-[var(--border)] rounded-[var(--radius)] shadow-2xl w-full max-w-xl overflow-hidden flex flex-col max-h-[90vh] text-[var(--foreground)]">
@@ -43,7 +54,7 @@ export default function SettingsModal({ settings, setSettings, onClose, onClearC
         <div className="p-6 overflow-y-auto space-y-8 flex-1">
           {/* Agent Section */}
           <section className="space-y-4">
-            <h3 className="text-lg font-semibold text-blue-400 border-b border-[var(--border)] pb-2">Agent</h3>
+            <h3 className="text-lg font-semibold text-blue-400 border-b border-[var(--border)] pb-2">Global Agent Policy</h3>
             <div className="space-y-4">
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-[var(--foreground)]/80">Command execution policy:</label>
@@ -103,6 +114,33 @@ export default function SettingsModal({ settings, setSettings, onClose, onClearC
             </div>
           </section>
 
+          {/* Project Policies Section */}
+          <section className="space-y-4">
+            <h3 className="text-lg font-semibold text-blue-400 border-b border-[var(--border)] pb-2">Project Policies</h3>
+            <div className="space-y-3">
+              {projects.length === 0 ? (
+                <p className="text-sm text-[var(--foreground)]/50">No projects found.</p>
+              ) : (
+                projects.map(project => (
+                  <div key={project} className="flex items-center justify-between gap-4 p-2 rounded bg-[var(--background)]/30 border border-[var(--border)]/50">
+                    <span className="text-sm font-medium truncate flex-1">{project}</span>
+                    <select
+                      value={localSettings.projectPolicies[project] || 'global'}
+                      onChange={(e) => updateProjectPolicy(project, e.target.value as AgentPolicy | 'global')}
+                      style={{ textAlignLast: 'center' }}
+                      className="bg-[var(--background)] border border-[var(--border)] rounded px-2 py-1 text-xs text-[var(--foreground)] focus:outline-none focus:border-blue-500 text-center"
+                    >
+                      <option value="global">Global ({localSettings.agentPolicy})</option>
+                      <option value="ask">Ask every time</option>
+                      <option value="safe">Safe commands</option>
+                      <option value="yolo">Auto-approve (YOLO)</option>
+                    </select>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
           {/* Chat Section */}
           <section className="space-y-4">
             <h3 className="text-lg font-semibold text-blue-400 border-b border-[var(--border)] pb-2">Chat</h3>
@@ -135,7 +173,8 @@ export default function SettingsModal({ settings, setSettings, onClose, onClearC
               <select
                 value={localSettings.appearance.uiMode}
                 onChange={(e) => updateSettings({ appearance: { ...localSettings.appearance, uiMode: e.target.value as UIMode } })}
-                className="w-full bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-blue-500 transition-colors"
+                style={{ textAlignLast: 'center' }}
+                className="w-full bg-[var(--background)] border border-[var(--border)] rounded-[var(--radius)] px-3 py-2 text-sm text-[var(--foreground)] focus:outline-none focus:border-blue-500 transition-colors text-center"
               >
                 <option value="gemini">Gemini</option>
                 <option value="chatgpt">ChatGPT</option>

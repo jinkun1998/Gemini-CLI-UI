@@ -71,9 +71,26 @@ export const ShadcnSidebar = React.memo(({
   </div>
 ));
 
-export const ShadcnHeader = React.memo(({ model, setModel, fallbackStatus, toggleTheme, theme }: any) => (
+export const ShadcnHeader = React.memo(({ model, setModel, fallbackStatus, toggleTheme, theme, chatPolicy, onUpdateChatPolicy, inheritPolicyLabel }: any) => (
   <header className="h-14 flex items-center justify-between border-b border-[var(--border)] bg-[var(--background)] px-6">
-    <div className="w-10" />
+    <div className="flex items-center gap-2">
+      {onUpdateChatPolicy && (
+        <div className="flex items-center gap-2 rounded-full border border-[var(--border)] px-3 py-1 text-xs hover:bg-[var(--surface)] cursor-pointer text-[var(--foreground)]/70 shadow-sm transition-colors">
+          <select 
+            value={chatPolicy} 
+            onChange={e => onUpdateChatPolicy(e.target.value as any)} 
+            style={{ textAlignLast: 'center' }}
+            className="bg-transparent border-none outline-none appearance-none cursor-pointer font-medium text-center"
+            title="Chat Policy"
+          >
+            <option value="inherit">Inherit ({inheritPolicyLabel})</option>
+            <option value="ask">Ask</option>
+            <option value="safe">Safe</option>
+            <option value="yolo">YOLO</option>
+          </select>
+        </div>
+      )}
+    </div>
     <div className="flex-1 flex justify-center items-center gap-4">
       {fallbackStatus && (
         <span className="text-amber-500 animate-pulse font-medium flex items-center gap-1 text-sm">
@@ -82,7 +99,7 @@ export const ShadcnHeader = React.memo(({ model, setModel, fallbackStatus, toggl
         </span>
       )}
       <div className="flex items-center gap-2 rounded-full border border-[var(--border)] px-4 py-1.5 text-sm hover:bg-[var(--surface)] cursor-pointer text-[var(--foreground)] shadow-sm transition-colors">
-        <select value={model} onChange={e => setModel(e.target.value)} className="bg-transparent border-none outline-none appearance-none cursor-pointer pr-4 font-medium text-[var(--foreground)]">
+        <select value={model} onChange={e => setModel(e.target.value)} style={{ textAlignLast: 'center' }} className="bg-transparent border-none outline-none appearance-none cursor-pointer font-medium text-[var(--foreground)] text-center">
           <option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option>
           <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
           <option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option>

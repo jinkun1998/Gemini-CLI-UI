@@ -21,6 +21,24 @@ if (!fs.existsSync(PROJECTS_DIR)) {
   fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 }
 
+// Helper to filter out verbose/sensitive logs
+function isVerboseLog(line: string): boolean {
+  const patterns = [
+    'failed with status',
+    'Retrying with backoff',
+    'GaxiosError',
+    'at Gaxios._request',
+    'at process.processTicksAndRejections',
+    'at async',
+    'Symbol(gaxios-gaxios-error)',
+    'RESOURCE_EXHAUSTED',
+    'MODEL_CAPACITY_EXHAUSTED',
+    'CloudCode-PA API error',
+    'rateLimitExceeded'
+  ];
+  return patterns.some(p => line.includes(p));
+}
+
 // Helper to generate understandable titles
 async function generateUnderstandableTitle(prompt: string, projectDir: string, model: string): Promise<string> {
   return new Promise((resolve) => {

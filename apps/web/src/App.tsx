@@ -116,19 +116,25 @@ export default function Home() {
       const AudioContextClass = (window.AudioContext || (window as any).webkitAudioContext);
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
+      const now = ctx.currentTime;
 
-      // Beam sound effect
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(1200, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.3);
-      gain.gain.setValueAtTime(0.1, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.3);
+      const playTone = (freq: number, start: number, duration: number, vol: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.8, start + duration);
+        gain.gain.setValueAtTime(vol, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+
+      // Comfortable "Slack-style" double knock (melodic and soft sine wave)
+      playTone(440, now, 0.15, 0.6);        // Louder soft knock (A4)
+      playTone(554.37, now + 0.1, 0.2, 0.5); // Harmonious follow-up (C#5)
       
       if (ctx.state === 'suspended') ctx.resume();
     } catch (e) {
@@ -343,6 +349,19 @@ export default function Home() {
     handleSend(userMessage.content, undefined, true);
   }, [messages, isGenerating, selectedChat, handleSend]);
 
+  const handleUpdateChatPolicy = useCallback((policy: AgentPolicy | 'inherit') => {
+    if (!selectedChat || !selectedProject) return;
+    const finalPolicy = policy === 'inherit' ? undefined : policy;
+    fetch(`${API_BASE}/projects/${selectedProject}/chats/${selectedChat.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ agentPolicy: finalPolicy })
+    }).then(r => r.json()).then(updatedChat => {
+      setChats(prev => prev.map(c => c.id === updatedChat.id ? updatedChat : c));
+      setSelectedChat(updatedChat);
+    });
+  }, [selectedChat, selectedProject]);
+
   const handleDeleteChat = useCallback((e: React.MouseEvent, chatId: string) => {
     e.stopPropagation();
     if (!selectedProject) return;
@@ -376,18 +395,43 @@ export default function Home() {
     </>
   ), [isShadcn, projects, selectedProject, setIsAddingProject, chats, selectedChat, handleCreateChat, handleDeleteChat, setShowSettings]);
 
-  const header = useMemo(() => isShadcn ? (
-    <ShadcnHeader model={model} setModel={setModel} fallbackStatus={fallbackStatus} toggleTheme={toggleTheme} theme={settings.appearance.theme} />
-  ) : (
-    <header className="h-14 border-b flex items-center justify-between px-6 bg-[var(--surface)] border-[var(--border)]">
-      <div className="font-semibold text-lg truncate">{selectedProject ? `${selectedProject} / ${selectedChat?.title || 'No chat selected'}` : 'Select a project'}</div>
-      <div className="flex items-center gap-4 text-sm">
-        {fallbackStatus && <span className="text-amber-500 animate-pulse font-medium mr-2 flex items-center gap-1"><span className="w-2 h-2 bg-amber-500 rounded-full"></span>{fallbackStatus}</span>}
-        <label className="flex items-center gap-2 cursor-pointer"><span className="text-gray-400">Model:</span><select value={model} onChange={e => setModel(e.target.value)} className="border-none rounded px-2 py-1 bg-[var(--background)] text-[var(--foreground)]"><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option><option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option><option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option><option value="gemini-2.5-pro">Gemini 2.5 Pro</option><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option></select></label>
-        <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--surface)] transition-colors text-gray-400 hover:text-[var(--foreground)]" title={`Switch to ${settings.appearance.theme === 'dark' ? 'light' : 'dark'} mode`}>{settings.appearance.theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
-      </div>
-    </header>
-  ), [isShadcn, model, fallbackStatus, toggleTheme, settings.appearance.theme, selectedProject, selectedChat]);
+  const header = useMemo(() => {
+    const projectPolicy = selectedProject ? settings.projectPolicies[selectedProject] : null;
+    const effectiveInheritPolicy = projectPolicy || settings.agentPolicy;
+
+    return isShadcn ? (
+      <ShadcnHeader 
+        model={model} setModel={setModel} fallbackStatus={fallbackStatus} toggleTheme={toggleTheme} theme={settings.appearance.theme}
+        chatPolicy={selectedChat?.agentPolicy || 'inherit'}
+        onUpdateChatPolicy={handleUpdateChatPolicy}
+        inheritPolicyLabel={effectiveInheritPolicy}
+      />
+    ) : (
+      <header className="h-14 border-b flex items-center justify-between px-6 bg-[var(--surface)] border-[var(--border)]">
+        <div className="font-semibold text-lg truncate flex items-center gap-2">
+          {selectedProject ? `${selectedProject} / ${selectedChat?.title || 'No chat selected'}` : 'Select a project'}
+          {selectedChat && (
+            <select
+              value={selectedChat.agentPolicy || 'inherit'}
+              onChange={(e) => handleUpdateChatPolicy(e.target.value as AgentPolicy | 'inherit')}
+              className="ml-2 bg-[var(--background)] border border-[var(--border)] rounded px-2 py-0.5 text-xs text-[var(--foreground)] font-normal text-center"
+              title="Execution policy for this chat"
+            >
+              <option value="inherit">Inherit ({effectiveInheritPolicy})</option>
+              <option value="ask">Ask</option>
+              <option value="safe">Safe</option>
+              <option value="yolo">YOLO</option>
+            </select>
+          )}
+        </div>
+        <div className="flex items-center gap-4 text-sm">
+          {fallbackStatus && <span className="text-amber-500 animate-pulse font-medium mr-2 flex items-center gap-1"><span className="w-2 h-2 bg-amber-500 rounded-full"></span>{fallbackStatus}</span>}
+          <label className="flex items-center gap-2 cursor-pointer"><span className="text-gray-400">Model:</span><select value={model} onChange={e => setModel(e.target.value)} style={{ textAlignLast: 'center' }} className="border-none rounded px-2 py-1 bg-[var(--background)] text-[var(--foreground)] text-center"><option value="gemini-3.1-pro-preview">Gemini 3.1 Pro Preview</option><option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option><option value="gemini-3-flash-preview">Gemini 3 Flash Preview</option><option value="gemini-2.5-pro">Gemini 2.5 Pro</option><option value="gemini-2.5-flash">Gemini 2.5 Flash</option><option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option></select></label>
+          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-[var(--surface)] transition-colors text-gray-400 hover:text-[var(--foreground)]" title={`Switch to ${settings.appearance.theme === 'dark' ? 'light' : 'dark'} mode`}>{settings.appearance.theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}</button>
+        </div>
+      </header>
+    );
+  }, [isShadcn, model, fallbackStatus, toggleTheme, settings.appearance.theme, selectedProject, selectedChat, settings.projectPolicies, settings.agentPolicy, handleUpdateChatPolicy]);
 
   const messagesContent = (
     <div className="flex-1 overflow-hidden flex flex-col relative">
@@ -426,7 +470,7 @@ export default function Home() {
 
   return (
     <ChatLayout sidebar={sidebar} header={header} messages={messagesContent} input={<ChatInputSection ChatInput={ChatInput} onSend={handleSend} onStop={handleStop} isGenerating={isGenerating} selectedChat={selectedChat} projectFiles={projectFiles} selectedProject={selectedProject} />}>
-      {showSettings && <SettingsModal settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} onClearChats={() => { if (confirm('Are you sure you want to clear all chats for this project?')) { fetch(`${API_BASE}/projects/${selectedProject}/chats`, { method: 'DELETE' }).then(() => { setChats([]); setSelectedChat(null); setMessages([]); }); } }} />}
+      {showSettings && <SettingsModal projects={projects} settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} onClearChats={() => { if (confirm('Are you sure you want to clear all chats for this project?')) { fetch(`${API_BASE}/projects/${selectedProject}/chats`, { method: 'DELETE' }).then(() => { setChats([]); setSelectedChat(null); setMessages([]); }); } }} />}
       {isAddingProject && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"><div className="border rounded-[var(--radius)] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[80vh] bg-[var(--surface)] border-[var(--border)] text-[var(--foreground)]"><div className="p-4 border-b flex justify-between items-center bg-[var(--surface)] border-[var(--border)]"><h3 className="text-lg font-semibold">Add Project</h3><button onClick={() => setIsAddingProject(false)} className="text-gray-400 hover:text-[var(--foreground)]"><X className="w-5 h-5" /></button></div><div className="p-4 flex flex-col gap-4 overflow-hidden"><div><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Create New Empty Project</label><div className="flex gap-2"><input type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleCreateProject()} placeholder="Project Name" className="flex-1 border rounded-[var(--radius)] px-3 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors bg-[var(--background)] border-[var(--border)] text-[var(--foreground)]" /><button onClick={() => handleCreateProject()} disabled={!newProjectName.trim()} className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-[var(--radius)] text-sm font-medium transition-colors text-white">Create</button></div></div><div className="flex-1 flex flex-col overflow-hidden"><label className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2 block">Or Select Existing Folder</label><div className="rounded-[var(--radius)] border flex flex-col overflow-hidden bg-[var(--background)] border-[var(--border)]"><div className="p-2 border-b flex items-center gap-2 text-xs text-gray-400 bg-[var(--surface)] border-[var(--border)]"><button onClick={() => parentPath && setBrowsePath(parentPath)} disabled={!parentPath} className="p-1 hover:text-[var(--foreground)] disabled:opacity-30"><ChevronLeft className="w-4 h-4" /></button><span className="truncate flex-1 font-mono">{browsePath}</span></div><div className="overflow-y-auto flex-1 p-1 min-h-[200px]">{browseEntries.map(entry => (<div key={entry.path} className="flex items-center justify-between p-2 rounded group transition-colors cursor-default hover:bg-[var(--surface)]"><div className="flex items-center gap-2 flex-1 min-w-0 cursor-pointer" onClick={() => entry.isDirectory ? setBrowsePath(entry.path) : null}><Folder className={`w-4 h-4 shrink-0 ${entry.isDirectory ? 'text-blue-400' : 'text-gray-500'}`} /><span className={`text-sm truncate ${entry.isDirectory ? 'text-[var(--foreground)]' : 'text-gray-500'}`}>{entry.name}</span></div>{entry.isDirectory && <button onClick={() => handleCreateProject(entry.path)} className="opacity-0 group-hover:opacity-100 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white px-2 py-1 rounded text-xs transition-all">Select Folder</button>}</div>))}</div></div></div></div><div className="p-4 flex justify-end bg-[var(--background)]/50"><button onClick={() => setIsAddingProject(false)} className="px-4 py-2 text-sm text-gray-400 hover:text-[var(--foreground)] transition-colors">Cancel</button></div></div></div>
       )}

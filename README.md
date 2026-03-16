@@ -6,13 +6,15 @@ A desktop and mobile UI for [Gemini CLI](https://github.com/google-gemini/gemini
 
 ## Features
 
-- **Responsive Design** - Works seamlessly across desktop, tablet, and mobile so you can also use Gemini CLI from mobile
-- **Multiple UI Modes** - Switch between distinct visual themes including default Gemini, ChatGPT, and Shadcn Assistant (assistant-ui style)
-- **Interactive Chat Interface** - Built-in chat interface for seamless communication with Gemini CLI
-- **File Explorer** - Interactive file tree with live file references
-- **Session Management** - Resume conversations, manage multiple sessions, and track history
-- **Model Selection** - Choose from multiple Gemini models including Gemini 2.5 Pro and Flash
-- **YOLO Mode** - Auto Approve mode for faster operations (use with caution)
+- **Responsive Design** - Works seamlessly across desktop, tablet, and mobile so you can also use Gemini CLI from mobile.
+- **Multiple UI Modes** - Switch between distinct visual themes including **Gemini (Default)**, **ChatGPT**, and **Shadcn Assistant** (assistant-ui.com style).
+- **Hierarchical Execution Policies** - Set command approval levels at the **Global**, **Project**, or **Chat** level. Overrides follow the hierarchy: Chat > Project > Global.
+- **Custom Tool Permissions** - Granularly toggle auto-approval for specific tools (e.g., auto-approve Read/Search but require confirmation for Write/Shell commands).
+- **Interactive Chat Interface** - Real-time WebSocket communication with official Gemini logo avatars and markdown support.
+- **Visual Polish** - Smooth circular reveal animations for theme switching and "Slack-style" double-knock sound notifications when responses finish.
+- **File Explorer** - Interactive file tree with live file references and @mentions support in chat.
+- **Session Management** - Resume conversations, manage multiple sessions, and track history.
+- **Model Selection** - Choose from multiple Gemini models including Gemini 3.1 Pro, 2.5 Flash, and more with automatic quota fallback.
 
 ## Quick Start
 
@@ -49,18 +51,18 @@ npm run dev
 
 #### Project Management
 The UI automatically discovers Gemini CLI projects from your local system:
-- **Visual Project Browser** - All available projects with metadata and session counts
-- **Project Actions** - Create new projects or select existing folders
+- **Visual Project Browser** - All available projects with metadata and session counts.
+- **Project Overrides** - Set custom execution policies per project in the Settings menu.
 
 #### Chat Interface
-- **Real-time Communication** - Stream responses from Gemini with WebSocket connection
-- **Session Management** - Resume previous conversations or start fresh sessions
-- **Message History** - Complete conversation history with markdown support
-- **Multi-format Support** - Text, code blocks (with Collapsible Code), and Mermaid diagrams
+- **Real-time Communication** - Stream responses from Gemini with WebSocket connection.
+- **Policy Toggles** - Quickly switch the execution policy (Ask/Safe/YOLO) for the current chat directly in the header.
+- **Interactive Approvals** - In restricted environments, the UI provides "Approve Action" buttons for manual confirmation of agent tasks.
+- **Multi-format Support** - Text, code blocks (with Collapsible Code), and Mermaid diagrams.
 
-#### Model Configuration
-- Switch seamlessly between Gemini models (Gemini 3.1 Pro Preview, 2.5 Pro, 2.5 Flash, etc.)
-- **Auto Fallback** - If a quota error occurs, the UI will automatically retry with a fallback model and update your settings.
+#### Security & Permissions
+- **Granular Control** - Use the "Custom permissions" policy to define exactly which tools the agent can use silently.
+- **Safe Mode Support** - Built-in fallback system to handle manual approvals when terminal access is restricted.
 
 ## Architecture
 
@@ -78,14 +80,14 @@ The codebase is structured as an npm workspace (monorepo):
 - `apps/api/`: Node.js Express backend and WebSocket server for real-time model streaming and CLI integration.
 
 ### Backend (Node.js + Express)
-- **Express Server** - RESTful API
-- **WebSocket Server** - Communication for streaming chats
-- **Gemini CLI Integration** - Process spawning and pty management
+- **Express Server** - RESTful API for project/chat management.
+- **WebSocket Server** - Handles streaming communication and interactive terminal sessions.
+- **Gemini CLI Integration** - Process spawning and approval mode management.
 
 ### Frontend (React + Vite)
-- **React 19** - Modern component architecture with hooks
-- **Tailwind CSS v4** - Utility-first CSS framework
-- **Responsive Design** - Clean interface optimized for code review
+- **React 19** - Modern component architecture with hooks and View Transitions.
+- **Tailwind CSS v4** - Utility-first CSS framework for rapid styling.
+- **UI Mode Registry** - Pluggable architecture for different interface styles (Gemini, ChatGPT, Shadcn).
 
 ## Acknowledgments
 
